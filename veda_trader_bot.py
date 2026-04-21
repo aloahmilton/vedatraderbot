@@ -42,10 +42,13 @@ from datetime import datetime
 TELEGRAM_TOKEN = "8652896161:AAEwKHUNG4G7JmRgChJokZq6oUQW5nZU-GI"
 CHAT_ID        = "-1003912798237"
 
-# Which pairs to scan - Forex Only
+# Which pairs to scan - Major Forex Only
 PAIRS = [
     "EUR/USD",
     "GBP/USD",
+    "USD/JPY",
+    "USD/CAD",
+    "AUD/USD",
 ]
 
 # Timeframe to use (5m = 5 minutes, best for scalping)
@@ -289,7 +292,7 @@ def scan_markets():
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Scanning {len(PAIRS)} pairs...")
 
     try:
-        exchange = ccxt.bitstamp({
+        exchange = ccxt.kraken({
             "enableRateLimit": True,
         })
 

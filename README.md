@@ -18,9 +18,9 @@ Professional real-time trading signal bot for Telegram. Implements the TSS Tri S
 |---|---|
 | EUR/USD | Major Forex |
 | GBP/USD | Major Forex |
-| BTC/USD | Crypto |
-| ETH/USD | Crypto |
-| XRP/USD | Crypto |
+| USD/JPY | Major Forex |
+| USD/CAD | Commodity Forex |
+| AUD/USD | Commodity Forex |
 
 ## Strategy Rules
 Signals trigger ONLY when ALL conditions are met:
