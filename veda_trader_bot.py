@@ -18,6 +18,7 @@ WHAT'S NEW IN v4:
   - Cleaner signal card layout for channel display
 """
 
+import os
 import time
 import math
 import schedule
@@ -25,12 +26,15 @@ import requests
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ══════════════════════════════════════════
 #  SETTINGS
 # ══════════════════════════════════════════
-TELEGRAM_TOKEN = "8652896161:AAEwKHUNG4G7JmRgChJokZq6oUQW5nZU-GI"
-CHAT_ID        = "-1003912798237"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID        = os.getenv("TELEGRAM_CHANNEL_ID", "")
 
 TIMEFRAME     = "5m"
 LOOKBACK_DAYS = 2
