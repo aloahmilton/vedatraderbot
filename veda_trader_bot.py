@@ -1,0 +1,342 @@
+"""
+╔══════════════════════════════════════════╗
+║        VEDA TRADER — Telegram Bot        ║
+║         KISS Scalping Signal Bot         ║
+╚══════════════════════════════════════════╝
+
+HOW TO SET UP (Step by Step):
+
+1. Create your bot:
+   - Open Telegram, search @BotFather
+   - Send: /newbot
+   - Name it: Veda Trader Bot
+   - Copy the TOKEN it gives you
+
+2. Get your Chat ID:
+   - Start your bot (click Start)
+   - Send any message to it
+   - Open: https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+   - Find your "chat":"id" number
+
+3. Install requirements:
+   pip install python-telegram-bot ccxt schedule requests
+
+4. Fill in your TOKEN and CHAT_ID below and run:
+   python veda_trader_bot.py
+
+The bot will scan markets every 5 minutes and
+send you signals when ALL 3 KISS rules are met.
+"""
+
+import os
+import time
+import schedule
+import requests
+import ccxt
+import json
+from datetime import datetime
+
+# ══════════════════════════════════════════
+#  YOUR SETTINGS — FILL THESE IN
+# ══════════════════════════════════════════
+TELEGRAM_TOKEN = "8652896161:AAEwKHUNG4G7JmRgChJokZq6oUQW5nZU-GI"
+CHAT_ID        = "-1003912798237"
+
+# Which pairs to scan
+PAIRS = [
+    "BTC/USDT",
+    "ETH/USDT",
+    "BNB/USDT",
+    "SOL/USDT",
+    "XRP/USDT",
+]
+
+# Timeframe to use (5m = 5 minutes, best for scalping)
+TIMEFRAME = "5m"
+
+# KISS Strategy Settings
+EMA_FAST    = 9    # Fast EMA
+EMA_SLOW    = 21   # Slow EMA
+RSI_PERIOD  = 14   # RSI period
+RSI_BUY_MIN = 40   # RSI must be ABOVE this to buy
+RSI_BUY_MAX = 65   # RSI must be BELOW this to buy
+RSI_SEL_MIN = 35   # RSI must be ABOVE this to sell
+RSI_SEL_MAX = 60   # RSI must be BELOW this to sell
+
+# Risk settings
+RISK_REWARD  = 2.0   # Take profit = 2x stop loss
+STOP_PERCENT = 0.5   # Stop loss = 0.5% from entry
+
+# ══════════════════════════════════════════
+#  CALCULATIONS
+# ══════════════════════════════════════════
+
+def send_telegram(message: str):
+    """Send message to your Telegram."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        return r.json().get("ok", False)
+    except Exception as e:
+        print(f"[Telegram Error] {e}")
+        return False
+
+
+def calculate_ema(prices: list, period: int) -> list:
+    """Calculate Exponential Moving Average."""
+    ema = []
+    k = 2 / (period + 1)
+    for i, price in enumerate(prices):
+        if i < period - 1:
+            ema.append(None)
+        elif i == period - 1:
+            ema.append(sum(prices[:period]) / period)
+        else:
+            ema.append(price * k + ema[-1] * (1 - k))
+    return ema
+
+
+def calculate_rsi(prices: list, period: int = 14) -> list:
+    """Calculate RSI."""
+    rsi = [None] * period
+    gains = []
+    losses = []
+
+    for i in range(1, len(prices)):
+        diff = prices[i] - prices[i - 1]
+        gains.append(max(diff, 0))
+        losses.append(max(-diff, 0))
+
+    if len(gains) < period:
+        return rsi
+
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+
+        if avg_loss == 0:
+            rsi.append(100)
+        else:
+            rs = avg_gain / avg_loss
+            rsi.append(round(100 - (100 / (1 + rs)), 2))
+
+    return rsi
+
+
+def get_signal_strength(ema_diff_pct: float, rsi: float, vol_ratio: float) -> int:
+    """Return signal strength 1-5."""
+    score = 0
+    if ema_diff_pct > 0.3: score += 2
+    elif ema_diff_pct > 0.1: score += 1
+
+    if 45 <= rsi <= 58: score += 2
+    elif 40 <= rsi <= 65: score += 1
+
+    if vol_ratio > 1.5: score += 1
+
+    return min(score, 5)
+
+
+def strength_bar(score: int) -> str:
+    """Return visual strength bar."""
+    filled = "█" * score
+    empty = "░" * (5 - score)
+    return f"{filled}{empty} {score*20}%"
+
+
+def analyze_pair(exchange, pair: str) -> dict | None:
+    """
+    Analyze a trading pair with KISS strategy.
+    Returns signal dict or None if no valid signal.
+    """
+    try:
+        candles = exchange.fetch_ohlcv(pair, TIMEFRAME, limit=100)
+        if len(candles) < 50:
+            return None
+
+        closes = [c[4] for c in candles]
+        volumes = [c[5] for c in candles]
+        current_price = closes[-1]
+
+        # Calculate indicators
+        ema_fast = calculate_ema(closes, EMA_FAST)
+        ema_slow = calculate_ema(closes, EMA_SLOW)
+        rsi_values = calculate_rsi(closes, RSI_PERIOD)
+
+        # Get latest valid values
+        fast_now  = ema_fast[-1]
+        fast_prev = ema_fast[-2]
+        slow_now  = ema_slow[-1]
+        slow_prev = ema_slow[-2]
+        rsi_now   = rsi_values[-1]
+
+        if None in [fast_now, fast_prev, slow_now, slow_prev, rsi_now]:
+            return None
+
+        # Volume check (compare last candle to 20-candle average)
+        avg_vol   = sum(volumes[-21:-1]) / 20
+        last_vol  = volumes[-1]
+        vol_ratio = last_vol / avg_vol if avg_vol > 0 else 0
+        high_vol  = vol_ratio > 1.0
+
+        # EMA crossover detection
+        bullish_cross = fast_prev <= slow_prev and fast_now > slow_now
+        bearish_cross = fast_prev >= slow_prev and fast_now < slow_now
+
+        # EMA distance for strength calculation
+        ema_diff_pct = abs(fast_now - slow_now) / slow_now * 100
+
+        signal = None
+
+        # ── BUY SIGNAL ──
+        if bullish_cross and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and high_vol:
+            stop_loss   = round(current_price * (1 - STOP_PERCENT / 100), 6)
+            take_profit = round(current_price * (1 + STOP_PERCENT / 100 * RISK_REWARD), 6)
+            strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
+            signal = {
+                "type": "BUY",
+                "pair": pair,
+                "price": current_price,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
+                "rsi": rsi_now,
+                "vol_ratio": round(vol_ratio, 2),
+                "strength": strength,
+            }
+
+        # ── SELL SIGNAL ──
+        elif bearish_cross and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and high_vol:
+            stop_loss   = round(current_price * (1 + STOP_PERCENT / 100), 6)
+            take_profit = round(current_price * (1 - STOP_PERCENT / 100 * RISK_REWARD), 6)
+            strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
+            signal = {
+                "type": "SELL",
+                "pair": pair,
+                "price": current_price,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
+                "rsi": rsi_now,
+                "vol_ratio": round(vol_ratio, 2),
+                "strength": strength,
+            }
+
+        return signal
+
+    except Exception as e:
+        print(f"[Error analyzing {pair}] {e}")
+        return None
+
+
+def format_signal_message(signal: dict) -> str:
+    """Format signal into a clean Telegram message."""
+    emoji  = "🟢" if signal["type"] == "BUY" else "🔴"
+    action = "BUY" if signal["type"] == "BUY" else "SELL"
+    bar    = strength_bar(signal["strength"])
+    time   = datetime.now().strftime("%H:%M UTC")
+
+    msg = f"""
+{emoji} <b>VEDA TRADER — {action} SIGNAL</b>
+
+📊 <b>Pair:</b> {signal["pair"]}
+💰 <b>Entry:</b> ${signal["price"]:,.6g}
+🛑 <b>Stop Loss:</b> ${signal["stop_loss"]:,.6g}
+🎯 <b>Take Profit:</b> ${signal["take_profit"]:,.6g}
+
+📈 <b>RSI:</b> {signal["rsi"]}
+📦 <b>Volume Ratio:</b> {signal["vol_ratio"]}x avg
+⚡ <b>Strength:</b> {bar}
+
+✅ <b>All KISS rules confirmed:</b>
+  • EMA {EMA_FAST}/{EMA_SLOW} crossover ✓
+  • RSI in safe zone ✓
+  • Volume above average ✓
+
+⚠️ <i>Risk 1–2% of account only. Always set your SL first.</i>
+🕐 {time}
+"""
+    return msg.strip()
+
+
+def scan_markets():
+    """Main function: scan all pairs and send valid signals."""
+    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Scanning {len(PAIRS)} pairs...")
+
+    try:
+        exchange = ccxt.binance({
+            "enableRateLimit": True,
+            "options": {"defaultType": "spot"}
+        })
+
+        signals_found = 0
+        for pair in PAIRS:
+            signal = analyze_pair(exchange, pair)
+            if signal:
+                print(f"  [SIGNAL] {signal['type']} on {pair}")
+                msg = format_signal_message(signal)
+                send_telegram(msg)
+                signals_found += 1
+                time.sleep(1)  # Avoid flooding
+            else:
+                print(f"  [NO SIGNAL] {pair}")
+
+        if signals_found == 0:
+            print("  No valid signals found. Waiting for next scan...")
+
+    except Exception as e:
+        print(f"[Scan Error] {e}")
+        send_telegram(f"⚠️ Veda Trader Bot error: {e}")
+
+
+def send_startup_message():
+    """Send startup confirmation to Telegram."""
+    msg = f"""
+🚀 <b>VEDA TRADER BOT STARTED</b>
+
+The KISS Scalping Bot is now live.
+Scanning every 5 minutes.
+
+📋 <b>Active Pairs:</b> {', '.join(PAIRS)}
+⏱ <b>Timeframe:</b> {TIMEFRAME}
+🔧 <b>Strategy:</b> EMA {EMA_FAST}/{EMA_SLOW} + RSI {RSI_PERIOD} + Volume
+
+Signals will appear here when all 3 KISS conditions are met.
+Trade safe. Risk 1-2% per trade only. 💪
+"""
+    send_telegram(msg.strip())
+
+
+# ══════════════════════════════════════════
+#  RUN THE BOT
+# ══════════════════════════════════════════
+if __name__ == "__main__":
+    print("=" * 44)
+    print("   VEDA TRADER — KISS Scalping Bot")
+    print("=" * 44)
+
+    if TELEGRAM_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("\n❌ ERROR: Please set your TELEGRAM_TOKEN and CHAT_ID")
+        print("   Read the setup instructions at the top of this file.")
+        exit(1)
+
+    print(f"\nBot starting...")
+    print(f"   Pairs: {PAIRS}")
+    print(f"   Timeframe: {TIMEFRAME}")
+    print(f"   Scanning every 5 minutes\n")
+
+    send_startup_message()
+    scan_markets()  # Run once immediately on start
+
+    # Then schedule every 5 minutes
+    schedule.every(5).minutes.do(scan_markets)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
