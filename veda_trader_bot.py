@@ -42,13 +42,10 @@ from datetime import datetime
 TELEGRAM_TOKEN = "8652896161:AAEwKHUNG4G7JmRgChJokZq6oUQW5nZU-GI"
 CHAT_ID        = "-1003912798237"
 
-# Which pairs to scan - Bitstamp Supported
+# Which pairs to scan - Forex Only
 PAIRS = [
     "EUR/USD",
     "GBP/USD",
-    "BTC/USD",
-    "ETH/USD",
-    "XRP/USD",
 ]
 
 # Timeframe to use (5m = 5 minutes, best for scalping)
