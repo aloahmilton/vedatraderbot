@@ -1,31 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - Veda Trader</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Space Grotesk', sans-serif; background: #0A0E1A; color: #E8EDF5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .auth-box { background: #111827; padding: 40px; border-radius: 12px; width: 100%; max-width: 400px; border: 1px solid rgba(255,255,255,0.07); }
-        .auth-box h2 { text-align: center; color: #FFD700; margin-bottom: 30px; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 8px; color: #6B7A99; }
-        .form-group input { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: #1A2235; color: #E8EDF5; }
-        .btn { width: 100%; background: #FFD700; color: #000; padding: 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
-        .link { text-align: center; margin-top: 20px; color: #6B7A99; }
-        .link a { color: #FFD700; text-decoration: none; }
-        .flash { background: rgba(255,77,109,0.2); color: #FF4D6D; padding: 10px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
-    </style>
-</head>
-<body>
-    <div class="auth-box">
+{% extends "base.html" %}
+{% block title %}Register — Veda Trader{% endblock %}
+{% block extra_style %}
+.auth-shell { display: flex; justify-content: center; align-items: center; min-height: 88vh; }
+.auth-box { width: 100%; max-width: 440px; }
+.auth-crest { font-family: 'Cinzel', serif; letter-spacing: 0.4em; color: var(--gold-2); font-size: 0.72rem; text-align: center; margin-bottom: 14px; }
+.auth-box h2 {
+    text-align: center; font-family: 'Cinzel', serif; letter-spacing: 0.18em;
+    font-size: 1.6rem; margin-bottom: 26px;
+    background: linear-gradient(180deg, #fff7d6, #d4af37 70%, #8a6a14);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.form-group { margin-bottom: 18px; }
+.form-group label {
+    display: block; margin-bottom: 8px; color: var(--gold-2);
+    font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase;
+}
+.form-group input {
+    width: 100%; padding: 14px 16px;
+    background: #050507;
+    border: 1px solid rgba(212,175,55,0.25);
+    border-radius: 10px; color: var(--ink);
+    font-family: 'Inter', sans-serif; font-size: 0.98rem;
+    transition: border-color .2s, box-shadow .2s;
+}
+.form-group input:focus {
+    outline: none;
+    border-color: var(--gold-2);
+    box-shadow: 0 0 0 3px rgba(212,175,55,0.15);
+}
+.btn-full { width: 100%; padding: 15px; margin-top: 8px; }
+.link { text-align: center; margin-top: 22px; color: var(--mute); font-size: 0.88rem; }
+.link a { color: var(--gold-1); text-decoration: none; }
+.link a:hover { color: var(--gold-2); }
+.brand-mini { text-align: center; margin-bottom: 24px; }
+.fineprint { color: var(--mute); font-size: 0.78rem; text-align: center; margin-top: 14px; line-height: 1.6; }
+{% endblock %}
+
+{% block content %}
+<div class="brand-mini"><a href="/" style="text-decoration:none;" class="brand">VEDA · TRADER</a></div>
+<div class="auth-shell">
+    <div class="auth-box panel">
+        <div class="auth-crest">— CLAIM ACCESS —</div>
         <h2>Create Account</h2>
         {% with messages = get_flashed_messages() %}
-        {% if messages %}
-        <div class="flash">{{ messages[0] }}</div>
-        {% endif %}
+        {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
         {% endwith %}
         <form method="POST">
             <div class="form-group">
@@ -36,11 +55,11 @@
                 <label>Password</label>
                 <input type="password" name="password" minlength="6" required>
             </div>
-            <button type="submit" class="btn">Register</button>
+            <button type="submit" class="btn btn-gold btn-full">Register</button>
         </form>
-        <div class="link">
-            Already have an account? <a href="/login">Login here</a>
-        </div>
+        <div class="fineprint">Free signal access activates after a verified $10 broker deposit.</div>
+        <div class="gold-line" style="margin: 22px 0 14px;"></div>
+        <div class="link">Already a member? <a href="/login">Login here</a></div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

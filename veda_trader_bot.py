@@ -51,10 +51,13 @@ RSI_BUY_MAX = 75
 RSI_SEL_MIN = 25
 RSI_SEL_MAX = 70
 
-VOL_MIN       = 0.50
+VOL_MIN       = 0.40
 RISK_REWARD   = 2.0
 STOP_PERCENT  = 0.3
-DEDUPE_MIN    = 30
+DEDUPE_MIN    = 20
+
+# Expiration window for binary-style signals (matches scan timeframe)
+EXPIRY_MINUTES = 5
 
 # ══════════════════════════════════════════
 #  18-PAIR UNIVERSE
@@ -292,11 +295,15 @@ def analyze(pair_info: dict) -> dict | None:
         "vol": round(vol_ratio, 2),
     }
 
-    # Send signal 1 CANDLE BEFORE actual crossover (just like Pine Script)
-    # This gives you 5 minutes heads up exactly when you need it
+    # ── PRIMARY TRIGGER: confirmed EMA crossover on the most recent candle ──
+    # bull_x / bear_x means a real cross just printed → tradable on next candle.
+    confirmed_buy  = bull_x and macd_bull and good_vol and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX
+    confirmed_sell = bear_x and macd_bear and good_vol and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX
+
+    # ── SECONDARY TRIGGER: 1 candle pre-cross (early entry) ──
     pre_signal = candles_away == 1 and converging and good_vol
 
-    if pre_signal and f0 < s0 and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX:
+    if confirmed_buy or (pre_signal and f0 < s0 and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and macd_bull):
         if is_dupe(name, "BUY"): return None
         sl = round(price * (1 - STOP_PERCENT / 100), 6)
         tp = round(price * (1 + STOP_PERCENT / 100 * RISK_REWARD), 6)
@@ -305,9 +312,10 @@ def analyze(pair_info: dict) -> dict | None:
             "sl": sl, "tp": tp, "rsi": round(rsi_now, 1),
             "vol": round(vol_ratio, 2),
             "strength": calc_strength(gap_pct, rsi_now, vol_ratio),
+            "trigger": "CROSS" if confirmed_buy else "PRE",
         }
 
-    if pre_signal and f0 > s0 and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX:
+    if confirmed_sell or (pre_signal and f0 > s0 and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and macd_bear):
         if is_dupe(name, "SELL"): return None
         sl = round(price * (1 + STOP_PERCENT / 100), 6)
         tp = round(price * (1 - STOP_PERCENT / 100 * RISK_REWARD), 6)
@@ -316,6 +324,7 @@ def analyze(pair_info: dict) -> dict | None:
             "sl": sl, "tp": tp, "rsi": round(rsi_now, 1),
             "vol": round(vol_ratio, 2),
             "strength": calc_strength(gap_pct, rsi_now, vol_ratio),
+            "trigger": "CROSS" if confirmed_sell else "PRE",
         }
 
     return None

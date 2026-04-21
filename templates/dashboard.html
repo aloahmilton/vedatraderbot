@@ -1,107 +1,158 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Veda Trader</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Space Grotesk', sans-serif; background: #0A0E1A; color: #E8EDF5; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+{% extends "base.html" %}
+{% block title %}Dashboard — Veda Trader{% endblock %}
+{% block extra_style %}
+.welcome { padding: 30px 0 10px; }
+.welcome .crest { font-family: 'Cinzel', serif; letter-spacing: 0.4em; color: var(--gold-2); font-size: 0.72rem; margin-bottom: 8px; }
+.welcome h1 {
+    font-family: 'Cinzel', serif; letter-spacing: 0.12em;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    background: linear-gradient(180deg, #fff7d6, #d4af37 70%, #8a6a14);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.welcome .sub { color: var(--mute); margin-top: 6px; font-size: 0.95rem; }
 
-        .nav { background: #1A2235; padding: 15px; border-radius: 8px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .nav a { color: #E8EDF5; text-decoration: none; margin-left: 20px; }
-        .nav a:hover { color: #FFD700; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 22px; margin: 30px 0; }
 
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin: 40px 0; }
+.card-title {
+    font-family: 'Cinzel', serif; letter-spacing: 0.18em;
+    color: var(--gold-1); font-size: 1rem; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 12px;
+}
+.card-title::before, .card-title::after {
+    content: ""; flex: 1; height: 1px; background: var(--gold-line); opacity: 0.5;
+}
 
-        .card { background: #111827; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); }
-        .card h3 { color: #FFD700; margin-bottom: 20px; }
+.status {
+    padding: 14px 16px; border-radius: 10px; margin: 14px 0;
+    font-size: 0.92rem; letter-spacing: 0.04em;
+    border: 1px solid;
+}
+.status.verified { background: rgba(27, 210, 155, 0.08); color: var(--green); border-color: rgba(27,210,155,0.3); }
+.status.unverified { background: rgba(245, 217, 138, 0.06); color: var(--gold-1); border-color: rgba(212,175,55,0.4); }
 
-        .status { padding: 15px; border-radius: 6px; margin: 15px 0; }
-        .status.verified { background: rgba(0,255,157,0.2); color: #00FF9D; }
-        .status.unverified { background: rgba(255,184,0,0.2); color: #FFB800; }
+.steps { color: var(--mute); margin: 14px 0 18px; line-height: 1.9; padding-left: 18px; font-size: 0.93rem; }
+.steps li::marker { color: var(--gold-2); }
 
-        .btn { display: inline-block; background: #FFD700; color: #000; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 5px; }
-        .btn.secondary { background: #6B7A99; color: #fff; }
+.card p { color: var(--mute); line-height: 1.7; font-size: 0.95rem; }
+.card .btn { margin: 6px 6px 0 0; padding: 11px 22px; font-size: 0.78rem; }
+.btn-secondary {
+    background: linear-gradient(180deg, #1a1a1d, #0c0c0e);
+    color: var(--ink);
+    border: 1px solid var(--gold-soft);
+}
+.btn-secondary:hover { border-color: var(--gold-2); color: var(--gold-1); }
 
-        .signals { margin-top: 40px; }
-        .signal-card { background: #1A2235; border-radius: 8px; padding: 15px; margin-bottom: 10px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="nav">
-            <strong style="color: #FFD700;">VEDA TRADER</strong>
-            <div>
-                <a href="/dashboard">Dashboard</a>
-                <a href="/logout">Logout</a>
-            </div>
-        </div>
+.signals-section { margin-top: 36px; }
+.signals-section h2 {
+    font-family: 'Cinzel', serif; letter-spacing: 0.18em;
+    color: var(--gold-1); font-size: 1.1rem; margin-bottom: 20px;
+}
+.signal-card {
+    background: linear-gradient(180deg, #0a0a0c, #050507);
+    border: 1px solid var(--gold-soft);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: border-color .2s, box-shadow .2s;
+}
+.signal-card:hover { border-color: var(--gold-2); box-shadow: 0 0 18px rgba(212,175,55,0.15); }
+.signal-card .left { display: flex; align-items: center; gap: 14px; }
+.signal-tag {
+    font-family: 'Cinzel', serif; letter-spacing: 0.18em; font-size: 0.72rem;
+    padding: 6px 12px; border-radius: 999px;
+}
+.signal-tag.BUY, .signal-tag.CALL { color: var(--green); border: 1px solid rgba(27,210,155,0.35); }
+.signal-tag.SELL, .signal-tag.PUT { color: var(--red); border: 1px solid rgba(255,85,119,0.35); }
+.signal-pair { font-weight: 600; letter-spacing: 0.06em; }
+.signal-card .right { color: var(--mute); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--mute); padding: 30px; font-size: 0.92rem; }
+{% endblock %}
 
-        <h1>Welcome, {{ user.email }}</h1>
+{% block content %}
+<div class="topbar">
+    <a href="/" style="text-decoration:none;" class="brand">VEDA · TRADER</a>
+    <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logout">Logout</a>
+    </nav>
+</div>
 
-        <div class="dashboard-grid">
-            <div class="card">
-                <h3>Account Status</h3>
-                {% if user.deposit_verified %}
-                <div class="status verified">✓ Verified - Full Access Granted</div>
-                <p>You have full access to live trading signals and Telegram channel.</p>
-                <a href="#" class="btn">Join Telegram Channel</a>
-                {% else %}
-                <div class="status unverified">⚠ Verification Required</div>
-                <p>To access free signals:</p>
-                <ol style="color: #6B7A99; margin: 15px 0; line-height: 1.8;">
-                    <li>Create broker account</li>
-                    <li>Deposit minimum $10</li>
-                    <li>Verify your deposit</li>
-                </ol>
-                <a href="/broker-signup" class="btn" target="_blank">Create Broker Account</a>
-                <a href="#" class="btn secondary" onclick="verifyDeposit()">Verify Deposit</a>
-                {% endif %}
-            </div>
+<section class="welcome">
+    <div class="crest">— MEMBER PORTAL —</div>
+    <h1>Welcome, {{ user.email }}</h1>
+    <div class="sub">Your legacy desk awaits.</div>
+</section>
 
-            <div class="card">
-                <h3>Trading Stats</h3>
-                <p>View performance metrics and signal history.</p>
-                <a href="#" class="btn secondary">View Statistics</a>
-            </div>
-        </div>
+<div class="gold-line"></div>
 
-        <section class="signals">
-            <h2>Recent Signals</h2>
-            {% for signal in signals %}
-            <div class="signal-card">
-                <strong>{{ signal.type }} - {{ signal.pair }}</strong>
-                <span style="color: #6B7A99; margin-left: 20px;">${{ signal.price }}</span>
-            </div>
-            {% endfor %}
-        </section>
+<div class="grid">
+    <div class="panel">
+        <div class="card-title">Account Status</div>
+        {% if user.deposit_verified %}
+        <div class="status verified">✓ Verified · Full Access Granted</div>
+        <p>You have unlocked the live signal feed and the private Telegram channel.</p>
+        <a href="#" class="btn btn-gold">Join Telegram</a>
+        {% else %}
+        <div class="status unverified">⚠ Verification Required</div>
+        <p>To unlock signals:</p>
+        <ol class="steps">
+            <li>Open a broker account</li>
+            <li>Deposit a minimum of $10</li>
+            <li>Verify your deposit below</li>
+        </ol>
+        <a href="/broker-signup" class="btn btn-gold" target="_blank">Open Broker</a>
+        <a href="#" class="btn btn-secondary" onclick="verifyDeposit()">Verify Deposit</a>
+        {% endif %}
     </div>
 
-    <script>
-        function verifyDeposit() {
-            const amount = prompt('Enter your deposit amount ($):');
-            if (amount && parseFloat(amount) >= 10) {
-                fetch('/verify-deposit', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `amount=${amount}`
-                })
-                .then(res => res.json())
-                .then(data => {
-                    alert(data.message);
-                    if (data.status === 'success') {
-                        location.reload();
-                    }
-                });
-            } else {
-                alert('Minimum deposit is $10');
-            }
-        }
-    </script>
-</body>
-</html>
+    <div class="panel">
+        <div class="card-title">Trading Stats</div>
+        <p>Performance metrics, signal history and session reports — coming soon to your portal.</p>
+        <a href="#" class="btn btn-secondary">View Statistics</a>
+    </div>
+</div>
+
+<div class="gold-line"></div>
+
+<section class="signals-section">
+    <h2>Recent Signals</h2>
+    {% if signals %}
+        {% for signal in signals %}
+        <div class="signal-card">
+            <div class="left">
+                <span class="signal-tag {{ signal.type }}">{{ signal.type }}</span>
+                <span class="signal-pair">{{ signal.pair }}</span>
+            </div>
+            <div class="right">{{ '%.5f'|format(signal.price) if signal.price else '' }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="panel empty">No signals yet. The desk is watching the market.</div>
+    {% endif %}
+</section>
+
+<footer>
+    <span class="cinzel">VEDA · TRADER</span><br><br>
+    &copy; 2026 — Trade with discipline
+</footer>
+
+<script>
+function verifyDeposit() {
+    const amount = prompt('Enter your deposit amount ($):');
+    if (amount && parseFloat(amount) >= 10) {
+        fetch('/verify-deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `amount=${amount}`
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message);
+            if (data.status === 'success') location.reload();
+        });
+    } else {
+        alert('Minimum deposit is $10');
+    }
+}
+</script>
+{% endblock %}

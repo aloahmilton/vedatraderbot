@@ -1,60 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veda Trader - KISS Scalping Signals</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Space Grotesk', sans-serif; background: #0A0E1A; color: #E8EDF5; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+{% extends "base.html" %}
+{% block title %}Veda Trader — Legacy Scalping Signals{% endblock %}
+{% block extra_style %}
+.hero { text-align: center; padding: 90px 20px 40px; position: relative; }
+.hero .crest { font-family: 'Cinzel', serif; letter-spacing: 0.5em; color: var(--gold-2); font-size: 0.78rem; margin-bottom: 22px; }
+.hero h1 {
+    font-family: 'Cinzel', serif; font-weight: 700; letter-spacing: 0.18em;
+    font-size: clamp(2.6rem, 7vw, 5.2rem);
+    background: linear-gradient(180deg, #ffffff 0%, #fff7d6 30%, #d4af37 65%, #6b4f10 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 60px rgba(212,175,55,0.35);
+    margin-bottom: 18px;
+}
+.hero .tag { color: var(--mute); font-size: 1.05rem; max-width: 620px; margin: 0 auto 36px; line-height: 1.7; letter-spacing: 0.02em; }
+.hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
 
-        .hero { text-align: center; padding: 80px 20px; }
-        .hero h1 { font-size: 4rem; color: #FFD700; margin-bottom: 20px; }
-        .hero p { color: #6B7A99; font-size: 1.4rem; max-width: 700px; margin: 0 auto 40px; }
-        .hero-buttons { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
-        .btn { padding: 15px 35px; border-radius: 8px; text-decoration: none; font-weight: 600; }
-        .btn-primary { background: #FFD700; color: #000; }
-        .btn-secondary { background: transparent; border: 1px solid #FFD700; color: #FFD700; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 60px 0; padding: 30px 0; border-top: 1px solid var(--gold-soft); border-bottom: 1px solid var(--gold-soft); position: relative; }
+.stats::before, .stats::after { content: ""; position: absolute; left: 0; right: 0; height: 1px; background: var(--gold-line); opacity: 0.7; }
+.stats::before { top: -1px; } .stats::after { bottom: -1px; }
+.stat { text-align: center; padding: 10px; }
+.stat .num { font-family: 'Cinzel', serif; font-size: 2.4rem; color: var(--gold-1); text-shadow: 0 0 18px rgba(212,175,55,0.4); }
+.stat .lbl { color: var(--mute); font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase; margin-top: 6px; }
+.stat + .stat { border-left: 1px solid var(--gold-soft); }
 
-        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin: 60px 0; }
-        .feature { background: #111827; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); }
-        .feature h3 { color: #FFD700; margin-bottom: 15px; }
-        .feature p { color: #6B7A99; line-height: 1.7; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; margin: 50px 0; }
+.feature { padding: 28px; }
+.feature .icon { font-family: 'Cinzel', serif; color: var(--gold-2); letter-spacing: 0.3em; font-size: 0.75rem; margin-bottom: 14px; }
+.feature h3 {
+    font-family: 'Cinzel', serif; letter-spacing: 0.1em; font-size: 1.05rem;
+    color: var(--gold-1); margin-bottom: 12px;
+}
+.feature p { color: var(--mute); line-height: 1.75; font-size: 0.95rem; }
 
-        footer { text-align: center; padding: 40px; color: #6B7A99; margin-top: 60px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <section class="hero">
-            <h1>VEDA TRADER</h1>
-            <p>Professional KISS Scalping Signals. Real-time alerts. 62% win rate. Free access with $10 broker deposit.</p>
-            <div class="hero-buttons">
-                <a href="/register" class="btn btn-primary">Get Started Free</a>
-                <a href="/login" class="btn btn-secondary">Login</a>
-            </div>
-        </section>
+.cta { text-align: center; padding: 50px 20px; }
+.cta h2 { font-family: 'Cinzel', serif; color: var(--gold-1); letter-spacing: 0.15em; font-size: 1.6rem; margin-bottom: 14px; }
+.cta p { color: var(--mute); margin-bottom: 28px; }
 
-        <section class="features">
-            <div class="feature">
-                <h3>Real-Time Signals</h3>
-                <p>Get instant BUY/SELL alerts every 5 minutes when all 3 KISS strategy conditions are met.</p>
-            </div>
-            <div class="feature">
-                <h3>Telegram Alerts</h3>
-                <p>Receive signals directly in your Telegram channel. Never miss a valid trade setup.</p>
-            </div>
-            <div class="feature">
-                <h3>Full Dashboard</h3>
-                <p>Track performance, view signal history, and access trading statistics 24/7.</p>
-            </div>
-        </section>
+@media (max-width: 640px) { .stats { grid-template-columns: 1fr; } .stat + .stat { border-left: none; border-top: 1px solid var(--gold-soft); } }
+{% endblock %}
 
-        <footer>
-            &copy; 2026 Veda Trader. All rights reserved. Trading involves risk.
-        </footer>
+{% block content %}
+<div class="topbar">
+    <div class="brand">VEDA · TRADER</div>
+    <nav>
+        <a href="/login">Login</a>
+        <a href="/register">Register</a>
+    </nav>
+</div>
+
+<section class="hero">
+    <div class="crest">— EST. LEGACY OF PRECISION —</div>
+    <h1>VEDA TRADER</h1>
+    <p class="tag">A legacy scalping platform for those who trade with discipline. Real-time forex signals — five-minute precision, gilded confidence.</p>
+    <div class="hero-buttons">
+        <a href="/register" class="btn btn-gold">Claim Access</a>
+        <a href="/login" class="btn btn-ghost">Member Login</a>
     </div>
-</body>
-</html>
+</section>
+
+<div class="gold-line"></div>
+
+<section class="stats">
+    <div class="stat"><div class="num">18</div><div class="lbl">Forex Pairs</div></div>
+    <div class="stat"><div class="num">24/5</div><div class="lbl">Signal Coverage</div></div>
+    <div class="stat"><div class="num">5m</div><div class="lbl">Scalp Window</div></div>
+</section>
+
+<section class="features">
+    <div class="panel feature">
+        <div class="icon">— I —</div>
+        <h3>Live Signals</h3>
+        <p>EMA · MACD · RSI · Volume — four pillars confirmed before every call. Direct entry, stop and target included.</p>
+    </div>
+    <div class="panel feature">
+        <div class="icon">— II —</div>
+        <h3>Telegram Delivery</h3>
+        <p>Signals arrive in your private channel the moment a setup confirms. Copy. Trade. Move on.</p>
+    </div>
+    <div class="panel feature">
+        <div class="icon">— III —</div>
+        <h3>Session Discipline</h3>
+        <p>Asian, London, Overlap, New York — pairs curated to each session's true liquidity.</p>
+    </div>
+</section>
+
+<div class="gold-line"></div>
+
+<section class="cta">
+    <h2>Enter The Order</h2>
+    <p>Free access with a verified $10 broker deposit.</p>
+    <a href="/register" class="btn btn-gold">Begin</a>
+</section>
+
+<footer>
+    <span class="cinzel">VEDA · TRADER</span><br><br>
+    &copy; 2026 — All rights reserved · Trading involves risk
+</footer>
+{% endblock %}
