@@ -58,10 +58,10 @@ TIMEFRAME = "5m"
 EMA_FAST    = 9    # Fast EMA
 EMA_SLOW    = 21   # Slow EMA
 RSI_PERIOD  = 14   # RSI period
-RSI_BUY_MIN = 40   # RSI must be ABOVE this to buy
-RSI_BUY_MAX = 65   # RSI must be BELOW this to buy
-RSI_SEL_MIN = 35   # RSI must be ABOVE this to sell
-RSI_SEL_MAX = 60   # RSI must be BELOW this to sell
+RSI_BUY_MIN = 35   # RSI must be ABOVE this to buy (increased range)
+RSI_BUY_MAX = 70   # RSI must be BELOW this to buy (increased range)
+RSI_SEL_MIN = 30   # RSI must be ABOVE this to sell (increased range)
+RSI_SEL_MAX = 65   # RSI must be BELOW this to sell (increased range)
 
 # Session filters (TSS Strategy)
 ONLY_SIGNAL_DURING_LONDON = False
@@ -189,10 +189,10 @@ def analyze_pair(exchange, pair: str) -> dict | None:
         avg_vol   = sum(volumes[-21:-1]) / 20
         last_vol  = volumes[-1]
         vol_ratio = last_vol / avg_vol if avg_vol > 0 else 0
-        high_vol  = last_vol > avg_vol
+        high_vol  = last_vol > avg_vol * 0.75
         
         # Avoid extreme volatility spikes - only consistent volume
-        normal_vol = vol_ratio > 0.8 and vol_ratio < 3.0
+        normal_vol = True
 
         # EMA crossover detection
         bullish_cross = fast_prev <= slow_prev and fast_now > slow_now
@@ -212,7 +212,7 @@ def analyze_pair(exchange, pair: str) -> dict | None:
         valid_session = True
         
         # ── BUY SIGNAL ──
-        if bullish_cross and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and high_vol and normal_vol and valid_session:
+        if bullish_cross and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and valid_session:
             stop_loss   = round(current_price * (1 - STOP_PERCENT / 100), 6)
             take_profit = round(current_price * (1 + STOP_PERCENT / 100 * RISK_REWARD), 6)
             strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
@@ -228,7 +228,7 @@ def analyze_pair(exchange, pair: str) -> dict | None:
             }
 
         # ── SELL SIGNAL ──
-        elif bearish_cross and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and high_vol and normal_vol and valid_session:
+        elif bearish_cross and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and valid_session:
             stop_loss   = round(current_price * (1 + STOP_PERCENT / 100), 6)
             take_profit = round(current_price * (1 - STOP_PERCENT / 100 * RISK_REWARD), 6)
             strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
@@ -297,23 +297,50 @@ def scan_markets():
         })
 
         signals_found = 0
+        approaching_pairs = []
+        
         for pair in PAIRS:
             signal = analyze_pair(exchange, pair)
             if signal:
-                print(f"  [SIGNAL] {signal['type']} on {pair}")
+                # Send signal IMMEDIATELY before any other code
                 msg = format_signal_message(signal)
                 send_telegram(msg)
+                print(f"  [SIGNAL SENT] {signal['type']} on {pair}")
                 signals_found += 1
                 time.sleep(1)  # Avoid flooding
             else:
+                # Check if pair is approaching crossover
+                candles = exchange.fetch_ohlcv(pair, TIMEFRAME, limit=100)
+                closes = [c[4] for c in candles]
+                ema_fast = calculate_ema(closes, EMA_FAST)
+                ema_slow = calculate_ema(closes, EMA_SLOW)
+                
+                if len(ema_fast) >= 3 and len(ema_slow) >= 3:
+                    fast_prev2 = ema_fast[-3]
+                    fast_prev1 = ema_fast[-2]
+                    slow_prev1 = ema_slow[-2]
+                    
+                    # Check if approaching crossover (1 candle away)
+                    if abs(fast_prev1 - slow_prev1) < 0.005:
+                        direction = "📈 BUY possible" if fast_prev1 < slow_prev1 and fast_prev1 > fast_prev2 else "📉 SELL possible"
+                        approaching_pairs.append(f"{direction}: {pair}")
+                
                 print(f"  [NO SIGNAL] {pair}")
 
-        if signals_found == 0:
+        # Send alert for approaching pairs
+        if approaching_pairs:
+            alert_msg = "⚠️ **UPCOMING SIGNAL ALERT**\n\nThe following pairs are approaching crossover:\n"
+            alert_msg += "\n".join(approaching_pairs)
+            alert_msg += "\n\nHave your broker ready and watch these pairs closely."
+            send_telegram(alert_msg)
+
+        if signals_found == 0 and not approaching_pairs:
             print("  No valid signals found. Waiting for next scan...")
 
     except Exception as e:
         print(f"[Scan Error] {e}")
-        send_telegram(f"⚠️ Veda Trader Bot error: {e}")
+        # Don't spam channel with errors
+        # send_telegram(f"⚠️ Veda Trader Bot error: {e}")
 
 
 def send_startup_message():
