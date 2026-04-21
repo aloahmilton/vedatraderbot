@@ -1,0 +1,257 @@
+//@version=5
+indicator("Tri Session Sentinel — Veda Trader", shorttitle="TSS · Veda", overlay=true, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+// ══════════════════════════════════════════════════════════
+//  TRI SESSION SENTINEL — by Veda Trader
+//  
+//  What this does:
+//  1. Shows Previous Day High, Low & Close as lines
+//  2. Shows Previous Week High & Low
+//  3. Shows live BUY/SELL signals (KISS Strategy)
+//  4. Highlights all 3 major trading sessions
+//  5. Shows session open price levels
+// ══════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────
+//  SETTINGS
+// ─────────────────────────────────────────
+
+grp1 = "📅 Previous Day Levels"
+show_pdh       = input.bool(true,  "Show Prev Day High",    group=grp1)
+show_pdl       = input.bool(true,  "Show Prev Day Low",     group=grp1)
+show_pdc       = input.bool(true,  "Show Prev Day Close",   group=grp1)
+pdh_col        = input.color(color.new(#00D4FF, 0),  "PDH Color",   group=grp1)
+pdl_col        = input.color(color.new(#FF4D6D, 0),  "PDL Color",   group=grp1)
+pdc_col        = input.color(color.new(#FFB800, 0),  "PDC Color",   group=grp1)
+
+grp2 = "📆 Previous Week Levels"
+show_pwh       = input.bool(true,  "Show Prev Week High",   group=grp2)
+show_pwl       = input.bool(true,  "Show Prev Week Low",    group=grp2)
+pwh_col        = input.color(color.new(#00FF9D, 30), "PWH Color",   group=grp2)
+pwl_col        = input.color(color.new(#FF4D6D, 30), "PWL Color",   group=grp2)
+
+grp3 = "🌍 Trading Sessions"
+show_sessions  = input.bool(true,  "Show Session Backgrounds", group=grp3)
+show_sess_open = input.bool(true,  "Show Session Open Lines",  group=grp3)
+asia_col       = input.color(color.new(#9B59B6, 88), "Asia Session",   group=grp3)
+london_col     = input.color(color.new(#3498DB, 88), "London Session", group=grp3)
+ny_col         = input.color(color.new(#E67E22, 88), "New York Session",group=grp3)
+asia_open_col  = input.color(color.new(#9B59B6, 20), "Asia Open Line",   group=grp3)
+london_open_col= input.color(color.new(#3498DB, 20), "London Open Line", group=grp3)
+ny_open_col    = input.color(color.new(#E67E22, 20), "NY Open Line",     group=grp3)
+
+grp4 = "⚡ KISS Signal Settings"
+show_signals   = input.bool(true,  "Show BUY/SELL Signals",  group=grp4)
+ema_fast_len   = input.int(9,      "EMA Fast",   minval=1,   group=grp4)
+ema_slow_len   = input.int(21,     "EMA Slow",   minval=1,   group=grp4)
+rsi_len        = input.int(14,     "RSI Period", minval=1,   group=grp4)
+rsi_buy_min    = input.int(40,     "RSI Buy Min",minval=1,   group=grp4)
+rsi_buy_max    = input.int(65,     "RSI Buy Max",minval=1,   group=grp4)
+rsi_sel_min    = input.int(35,     "RSI Sell Min",minval=1,  group=grp4)
+rsi_sel_max    = input.int(60,     "RSI Sell Max",minval=1,  group=grp4)
+vol_mult       = input.float(1.0,  "Volume Multiplier (avg)", step=0.1, group=grp4)
+
+grp5 = "🎨 Visual Options"
+show_ema       = input.bool(true,  "Show EMA Lines",        group=grp5)
+show_labels    = input.bool(true,  "Show Level Labels",     group=grp5)
+label_size     = input.string("small", "Label Size", options=["tiny","small","normal"], group=grp5)
+
+// ─────────────────────────────────────────
+//  EMA & RSI
+// ─────────────────────────────────────────
+ema_fast = ta.ema(close, ema_fast_len)
+ema_slow = ta.ema(close, ema_slow_len)
+rsi      = ta.rsi(close, rsi_len)
+vol_avg  = ta.sma(volume, 20)
+
+plot(show_ema ? ema_fast : na, "EMA 9",  color=color.new(#00D4FF, 0), linewidth=2)
+plot(show_ema ? ema_slow : na, "EMA 21", color=color.new(#FFB800, 0), linewidth=2)
+
+// ─────────────────────────────────────────
+//  PREVIOUS DAY HIGH / LOW / CLOSE
+// ─────────────────────────────────────────
+[pd_high, pd_low, pd_close] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead=barmerge.lookahead_on)
+
+if show_pdh and show_pdh
+    line.new(bar_index, pd_high, bar_index + 1, pd_high, extend=extend.right, color=pdh_col, width=2, style=line.style_dashed)
+
+if show_pdl
+    line.new(bar_index, pd_low, bar_index + 1, pd_low, extend=extend.right, color=pdl_col, width=2, style=line.style_dashed)
+
+if show_pdc
+    line.new(bar_index, pd_close, bar_index + 1, pd_close, extend=extend.right, color=pdc_col, width=1, style=line.style_dotted)
+
+// Labels for PDH/PDL/PDC (only draw once per day)
+is_new_day = ta.change(time("D")) != 0
+
+lbl_sz = label_size == "tiny" ? size.tiny : label_size == "small" ? size.small : size.normal
+
+if show_labels and is_new_day
+    if show_pdh
+        label.new(bar_index, pd_high, "PDH " + str.tostring(pd_high, format.mintick), color=color.new(pdh_col, 80), textcolor=pdh_col, style=label.style_label_left, size=lbl_sz)
+    if show_pdl
+        label.new(bar_index, pd_low,  "PDL " + str.tostring(pd_low, format.mintick),  color=color.new(pdl_col, 80), textcolor=pdl_col, style=label.style_label_left, size=lbl_sz)
+    if show_pdc
+        label.new(bar_index, pd_close,"PDC " + str.tostring(pd_close, format.mintick), color=color.new(pdc_col, 80), textcolor=pdc_col, style=label.style_label_left, size=lbl_sz)
+
+// ─────────────────────────────────────────
+//  PREVIOUS WEEK HIGH / LOW
+// ─────────────────────────────────────────
+[pw_high, pw_low] = request.security(syminfo.tickerid, "W", [high[1], low[1]], lookahead=barmerge.lookahead_on)
+
+if show_pwh
+    line.new(bar_index, pw_high, bar_index + 1, pw_high, extend=extend.right, color=pwh_col, width=2, style=line.style_solid)
+
+if show_pwl
+    line.new(bar_index, pw_low, bar_index + 1, pw_low, extend=extend.right, color=pwl_col, width=2, style=line.style_solid)
+
+is_new_week = ta.change(time("W")) != 0
+
+if show_labels and is_new_week
+    if show_pwh
+        label.new(bar_index, pw_high, "PWH " + str.tostring(pw_high, format.mintick), color=color.new(pwh_col, 70), textcolor=pwh_col, style=label.style_label_left, size=lbl_sz)
+    if show_pwl
+        label.new(bar_index, pw_low,  "PWL " + str.tostring(pw_low, format.mintick),  color=color.new(pwl_col, 70), textcolor=pwl_col, style=label.style_label_left, size=lbl_sz)
+
+// ─────────────────────────────────────────
+//  TRADING SESSIONS
+//  All times in UTC
+//  Asia:   00:00 – 09:00
+//  London: 07:00 – 16:00
+//  New York: 12:00 – 21:00
+// ─────────────────────────────────────────
+
+// Session detection using time()
+in_asia   = not na(time(timeframe.period, "0000-0900:1234567", "UTC"))
+in_london = not na(time(timeframe.period, "0700-1600:1234567", "UTC"))
+in_ny     = not na(time(timeframe.period, "1200-2100:1234567", "UTC"))
+
+// Session open detection (first bar of session)
+asia_open   = in_asia   and not in_asia[1]
+london_open = in_london and not in_london[1]
+ny_open     = in_ny     and not in_ny[1]
+
+// Background highlights
+bgcolor(show_sessions and in_asia   and not in_london ? color.new(asia_col,   95) : na, title="Asia Bg")
+bgcolor(show_sessions and in_london and not in_ny     ? color.new(london_col, 95) : na, title="London Bg")
+bgcolor(show_sessions and in_ny                       ? color.new(ny_col,     95) : na, title="NY Bg")
+
+// Session open horizontal lines
+if show_sess_open and asia_open
+    line.new(bar_index, open, bar_index + 1, open, extend=extend.right, color=asia_open_col, width=2, style=line.style_solid)
+    label.new(bar_index, open, "🌏 ASIA OPEN  " + str.tostring(open, format.mintick), color=color.new(asia_open_col, 70), textcolor=asia_open_col, style=label.style_label_right, size=lbl_sz)
+
+if show_sess_open and london_open
+    line.new(bar_index, open, bar_index + 1, open, extend=extend.right, color=london_open_col, width=2, style=line.style_solid)
+    label.new(bar_index, open, "🇬🇧 LONDON OPEN  " + str.tostring(open, format.mintick), color=color.new(london_open_col, 70), textcolor=london_open_col, style=label.style_label_right, size=lbl_sz)
+
+if show_sess_open and ny_open
+    line.new(bar_index, open, bar_index + 1, open, extend=extend.right, color=ny_open_col, width=2, style=line.style_solid)
+    label.new(bar_index, open, "🗽 NEW YORK OPEN  " + str.tostring(open, format.mintick), color=color.new(ny_open_col, 70), textcolor=ny_open_col, style=label.style_label_right, size=lbl_sz)
+
+// Session labels on chart (top of visible area)
+if show_sessions and in_asia and not in_asia[1]
+    label.new(bar_index, high * 1.001, "ASIA SESSION", color=color.new(asia_col, 60), textcolor=#9B59B6, style=label.style_label_down, size=size.tiny)
+
+if show_sessions and in_london and not in_london[1]
+    label.new(bar_index, high * 1.001, "LONDON SESSION", color=color.new(london_col, 60), textcolor=#3498DB, style=label.style_label_down, size=size.tiny)
+
+if show_sessions and in_ny and not in_ny[1]
+    label.new(bar_index, high * 1.001, "NEW YORK SESSION", color=color.new(ny_col, 60), textcolor=#E67E22, style=label.style_label_down, size=size.tiny)
+
+// ─────────────────────────────────────────
+//  KISS BUY / SELL SIGNALS
+// ─────────────────────────────────────────
+high_vol       = volume > vol_avg * vol_mult
+bullish_cross  = ta.crossover(ema_fast, ema_slow)
+bearish_cross  = ta.crossunder(ema_fast, ema_slow)
+
+buy_signal  = show_signals and bullish_cross and rsi >= rsi_buy_min and rsi <= rsi_buy_max and high_vol
+sell_signal = show_signals and bearish_cross and rsi >= rsi_sel_min and rsi <= rsi_sel_max and high_vol
+
+// Signal shapes
+plotshape(buy_signal,  title="BUY Signal",  style=shape.labelup,   location=location.belowbar, color=#00FF9D, textcolor=color.black, text="BUY",  size=size.normal)
+plotshape(sell_signal, title="SELL Signal", style=shape.labeldown,  location=location.abovebar, color=#FF4D6D, textcolor=color.white, text="SELL", size=size.normal)
+
+// Signal detail labels (show entry, SL, TP)
+stop_pct = 0.005  // 0.5% stop
+
+if buy_signal
+    entry_p = close
+    sl_p    = close * (1 - stop_pct)
+    tp_p    = close * (1 + stop_pct * 2.0)
+    label.new(bar_index, low * 0.999,
+      "✅ BUY · RSI: " + str.tostring(math.round(rsi)) +
+      "\nEntry: " + str.tostring(entry_p, format.mintick) +
+      "\nSL:    " + str.tostring(sl_p,    format.mintick) +
+      "\nTP:    " + str.tostring(tp_p,    format.mintick),
+      color=color.new(#00FF9D, 10),
+      textcolor=color.black,
+      style=label.style_label_up,
+      size=size.small)
+
+if sell_signal
+    entry_p = close
+    sl_p    = close * (1 + stop_pct)
+    tp_p    = close * (1 - stop_pct * 2.0)
+    label.new(bar_index, high * 1.001,
+      "🔴 SELL · RSI: " + str.tostring(math.round(rsi)) +
+      "\nEntry: " + str.tostring(entry_p, format.mintick) +
+      "\nSL:    " + str.tostring(sl_p,    format.mintick) +
+      "\nTP:    " + str.tostring(tp_p,    format.mintick),
+      color=color.new(#FF4D6D, 10),
+      textcolor=color.white,
+      style=label.style_label_down,
+      size=size.small)
+
+// ─────────────────────────────────────────
+//  ALERTS
+// ─────────────────────────────────────────
+alertcondition(buy_signal,  title="🟢 Veda BUY Signal",  message="VEDA TRADER ✅ BUY SIGNAL on {{ticker}} @ {{close}} | RSI: {{plot_0}} | All KISS rules confirmed. Set your SL & TP!")
+alertcondition(sell_signal, title="🔴 Veda SELL Signal", message="VEDA TRADER 🔴 SELL SIGNAL on {{ticker}} @ {{close}} | RSI: {{plot_0}} | All KISS rules confirmed. Set your SL & TP!")
+alertcondition(london_open, title="🇬🇧 London Session Open", message="VEDA TRADER — London session is now open. High volatility period begins.")
+alertcondition(ny_open,     title="🗽 New York Session Open", message="VEDA TRADER — New York session is now open. Watch for breakouts.")
+alertcondition(asia_open,   title="🌏 Asia Session Open",   message="VEDA TRADER — Asia session is now open.")
+
+// ─────────────────────────────────────────
+//  DASHBOARD TABLE
+// ─────────────────────────────────────────
+var table dash = table.new(position.top_right, 2, 9, bgcolor=color.new(#0A0E1A, 10), border_color=color.new(#FFFFFF, 80), border_width=1, frame_color=color.new(#00D4FF, 40), frame_width=1)
+
+tbl_header_bg   = color.new(#0F3460, 20)
+tbl_buy_bg      = color.new(#00FF9D, 85)
+tbl_sell_bg     = color.new(#FF4D6D, 85)
+tbl_neutral_bg  = color.new(#1A2235, 20)
+
+sess_label = in_ny ? "🗽 NEW YORK" : in_london ? "🇬🇧 LONDON" : in_asia ? "🌏 ASIA" : "⏸ CLOSED"
+rsi_color  = rsi > 70 ? color.new(#FF4D6D, 60) : rsi < 30 ? color.new(#00FF9D, 60) : tbl_neutral_bg
+ema_cross  = bullish_cross ? "📈 BULLISH X" : bearish_cross ? "📉 BEARISH X" : ema_fast > ema_slow ? "↗ ABOVE" : "↘ BELOW"
+signal_now = buy_signal ? "🟢 BUY NOW" : sell_signal ? "🔴 SELL NOW" : "⏳ WAITING"
+signal_bg  = buy_signal ? tbl_buy_bg : sell_signal ? tbl_sell_bg : tbl_neutral_bg
+
+table.cell(dash, 0, 0, "TRI SESSION SENTINEL",  text_color=#00D4FF, bgcolor=tbl_header_bg, text_size=size.small, text_halign=text.align_left)
+table.cell(dash, 1, 0, "Veda Trader",           text_color=#FFB800, bgcolor=tbl_header_bg, text_size=size.small, text_halign=text.align_right)
+
+table.cell(dash, 0, 1, "Session",       text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 1, sess_label,      text_color=#FFFFFF,                 bgcolor=tbl_neutral_bg, text_size=size.small)
+
+table.cell(dash, 0, 2, "Signal",        text_color=color.new(#FFFFFF, 30), bgcolor=signal_bg, text_size=size.small)
+table.cell(dash, 1, 2, signal_now,      text_color=#FFFFFF,                 bgcolor=signal_bg, text_size=size.small)
+
+table.cell(dash, 0, 3, "EMA 9/21",     text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 3, ema_cross,       text_color=#FFB800,                 bgcolor=tbl_neutral_bg, text_size=size.small)
+
+table.cell(dash, 0, 4, "RSI (" + str.tostring(rsi_len) + ")", text_color=color.new(#FFFFFF, 30), bgcolor=rsi_color, text_size=size.small)
+table.cell(dash, 1, 4, str.tostring(math.round(rsi * 10) / 10), text_color=#FFFFFF, bgcolor=rsi_color, text_size=size.small)
+
+table.cell(dash, 0, 5, "Volume",        text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 5, high_vol ? "✅ HIGH" : "⚠️ LOW",  text_color=high_vol ? #00FF9D : #FFB800, bgcolor=tbl_neutral_bg, text_size=size.small)
+
+table.cell(dash, 0, 6, "Prev Day H",   text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 6, str.tostring(pd_high, format.mintick), text_color=#00D4FF, bgcolor=tbl_neutral_bg, text_size=size.small)
+
+table.cell(dash, 0, 7, "Prev Day L",   text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 7, str.tostring(pd_low, format.mintick),  text_color=#FF4D6D, bgcolor=tbl_neutral_bg, text_size=size.small)
+
+table.cell(dash, 0, 8, "Prev Week H/L", text_color=color.new(#FFFFFF, 30), bgcolor=tbl_neutral_bg, text_size=size.small)
+table.cell(dash, 1, 8, str.tostring(pw_high, format.mintick) + " / " + str.tostring(pw_low, format.mintick), text_color=#00FF9D, bgcolor=tbl_neutral_bg, text_size=size.small)

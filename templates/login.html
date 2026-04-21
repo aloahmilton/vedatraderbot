@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Veda Trader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; background: #0A0E1A; color: #E8EDF5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .auth-box { background: #111827; padding: 40px; border-radius: 12px; width: 100%; max-width: 400px; border: 1px solid rgba(255,255,255,0.07); }
+        .auth-box h2 { text-align: center; color: #FFD700; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #6B7A99; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: #1A2235; color: #E8EDF5; }
+        .btn { width: 100%; background: #FFD700; color: #000; padding: 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        .link { text-align: center; margin-top: 20px; color: #6B7A99; }
+        .link a { color: #FFD700; text-decoration: none; }
+        .flash { background: rgba(255,77,109,0.2); color: #FF4D6D; padding: 10px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <h2>Login</h2>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+        <form method="POST">
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+        <div class="link">
+            Don't have an account? <a href="/register">Register here</a>
+        </div>
+    </div>
+</body>
+</html>

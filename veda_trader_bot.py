@@ -42,19 +42,19 @@ from datetime import datetime
 TELEGRAM_TOKEN = "8652896161:AAEwKHUNG4G7JmRgChJokZq6oUQW5nZU-GI"
 CHAT_ID        = "-1003912798237"
 
-# Which pairs to scan
+# Which pairs to scan - Bitstamp Supported
 PAIRS = [
-    "BTC/USDT",
-    "ETH/USDT",
-    "BNB/USDT",
-    "SOL/USDT",
-    "XRP/USDT",
+    "EUR/USD",
+    "GBP/USD",
+    "BTC/USD",
+    "ETH/USD",
+    "XRP/USD",
 ]
 
 # Timeframe to use (5m = 5 minutes, best for scalping)
 TIMEFRAME = "5m"
 
-# KISS Strategy Settings
+# TSS Tri Session Sentinel Strategy Settings
 EMA_FAST    = 9    # Fast EMA
 EMA_SLOW    = 21   # Slow EMA
 RSI_PERIOD  = 14   # RSI period
@@ -62,6 +62,10 @@ RSI_BUY_MIN = 40   # RSI must be ABOVE this to buy
 RSI_BUY_MAX = 65   # RSI must be BELOW this to buy
 RSI_SEL_MIN = 35   # RSI must be ABOVE this to sell
 RSI_SEL_MAX = 60   # RSI must be BELOW this to sell
+
+# Session filters (TSS Strategy)
+ONLY_SIGNAL_DURING_LONDON = False
+ONLY_SIGNAL_DURING_NY = False
 
 # Risk settings
 RISK_REWARD  = 2.0   # Take profit = 2x stop loss
@@ -181,11 +185,14 @@ def analyze_pair(exchange, pair: str) -> dict | None:
         if None in [fast_now, fast_prev, slow_now, slow_prev, rsi_now]:
             return None
 
-        # Volume check (compare last candle to 20-candle average)
+        # Volume check (exact match to TSS Pine Script: volume > 20 SMA)
         avg_vol   = sum(volumes[-21:-1]) / 20
         last_vol  = volumes[-1]
         vol_ratio = last_vol / avg_vol if avg_vol > 0 else 0
-        high_vol  = vol_ratio > 1.0
+        high_vol  = last_vol > avg_vol
+        
+        # Avoid extreme volatility spikes - only consistent volume
+        normal_vol = vol_ratio > 0.8 and vol_ratio < 3.0
 
         # EMA crossover detection
         bullish_cross = fast_prev <= slow_prev and fast_now > slow_now
@@ -196,8 +203,16 @@ def analyze_pair(exchange, pair: str) -> dict | None:
 
         signal = None
 
+        # TSS Strategy: Only signal during London / New York sessions
+        current_hour = datetime.utcnow().hour
+        in_london = 7 <= current_hour < 16
+        in_ny = 12 <= current_hour < 21
+        
+        # Allow all sessions for Forex pairs - no restrictions
+        valid_session = True
+        
         # ── BUY SIGNAL ──
-        if bullish_cross and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and high_vol:
+        if bullish_cross and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and high_vol and normal_vol and valid_session:
             stop_loss   = round(current_price * (1 - STOP_PERCENT / 100), 6)
             take_profit = round(current_price * (1 + STOP_PERCENT / 100 * RISK_REWARD), 6)
             strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
@@ -213,7 +228,7 @@ def analyze_pair(exchange, pair: str) -> dict | None:
             }
 
         # ── SELL SIGNAL ──
-        elif bearish_cross and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and high_vol:
+        elif bearish_cross and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and high_vol and normal_vol and valid_session:
             stop_loss   = round(current_price * (1 + STOP_PERCENT / 100), 6)
             take_profit = round(current_price * (1 - STOP_PERCENT / 100 * RISK_REWARD), 6)
             strength    = get_signal_strength(ema_diff_pct, rsi_now, vol_ratio)
@@ -242,6 +257,9 @@ def format_signal_message(signal: dict) -> str:
     bar    = strength_bar(signal["strength"])
     time   = datetime.now().strftime("%H:%M UTC")
 
+    # Get next pairs being scanned for users to prepare
+    next_pairs = [p for p in PAIRS if p != signal["pair"]][:3]
+    
     msg = f"""
 {emoji} <b>VEDA TRADER — {action} SIGNAL</b>
 
@@ -254,12 +272,16 @@ def format_signal_message(signal: dict) -> str:
 📦 <b>Volume Ratio:</b> {signal["vol_ratio"]}x avg
 ⚡ <b>Strength:</b> {bar}
 
-✅ <b>All KISS rules confirmed:</b>
+✅ <b>All TSS conditions confirmed:</b>
   • EMA {EMA_FAST}/{EMA_SLOW} crossover ✓
   • RSI in safe zone ✓
-  • Volume above average ✓
+  • Normal consistent volume ✓
+
+📌 <b>Upcoming pairs being watched:</b>
+{'  • ' + '<br>  • '.join(next_pairs)}
 
 ⚠️ <i>Risk 1–2% of account only. Always set your SL first.</i>
+🌍 <b>Timezone:</b> UTC
 🕐 {time}
 """
     return msg.strip()
@@ -270,9 +292,8 @@ def scan_markets():
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Scanning {len(PAIRS)} pairs...")
 
     try:
-        exchange = ccxt.binance({
+        exchange = ccxt.bitstamp({
             "enableRateLimit": True,
-            "options": {"defaultType": "spot"}
         })
 
         signals_found = 0
@@ -298,17 +319,25 @@ def scan_markets():
 def send_startup_message():
     """Send startup confirmation to Telegram."""
     msg = f"""
-🚀 <b>VEDA TRADER BOT STARTED</b>
+📌 <b>DAILY VEDA TRADER UPDATE</b>
 
-The KISS Scalping Bot is now live.
-Scanning every 5 minutes.
+✅ Bot is online and scanning markets 24/7
+⏱ Scan interval: every 5 minutes
+🌍 All times are in UTC timezone
+📊 Timeframe used: {TIMEFRAME}
 
 📋 <b>Active Pairs:</b> {', '.join(PAIRS)}
-⏱ <b>Timeframe:</b> {TIMEFRAME}
-🔧 <b>Strategy:</b> EMA {EMA_FAST}/{EMA_SLOW} + RSI {RSI_PERIOD} + Volume
 
-Signals will appear here when all 3 KISS conditions are met.
-Trade safe. Risk 1-2% per trade only. 💪
+📝 <b>HOW TO FOLLOW:</b>
+1. Always set Stop Loss immediately on entry
+2. Risk maximum 1-2% of your account per trade
+3. Never move your Stop Loss
+4. Take full profit at target or trail
+
+🔧 <b>Strategy:</b> TSS Tri Session Sentinel
+
+Trade safe. 💪
+🕐 {datetime.utcnow().strftime("%d %b %Y %H:%M UTC")}
 """
     send_telegram(msg.strip())
 

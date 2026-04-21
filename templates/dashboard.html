@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Veda Trader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; background: #0A0E1A; color: #E8EDF5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        .nav { background: #1A2235; padding: 15px; border-radius: 8px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .nav a { color: #E8EDF5; text-decoration: none; margin-left: 20px; }
+        .nav a:hover { color: #FFD700; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin: 40px 0; }
+
+        .card { background: #111827; padding: 30px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); }
+        .card h3 { color: #FFD700; margin-bottom: 20px; }
+
+        .status { padding: 15px; border-radius: 6px; margin: 15px 0; }
+        .status.verified { background: rgba(0,255,157,0.2); color: #00FF9D; }
+        .status.unverified { background: rgba(255,184,0,0.2); color: #FFB800; }
+
+        .btn { display: inline-block; background: #FFD700; color: #000; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 5px; }
+        .btn.secondary { background: #6B7A99; color: #fff; }
+
+        .signals { margin-top: 40px; }
+        .signal-card { background: #1A2235; border-radius: 8px; padding: 15px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <strong style="color: #FFD700;">VEDA TRADER</strong>
+            <div>
+                <a href="/dashboard">Dashboard</a>
+                <a href="/logout">Logout</a>
+            </div>
+        </div>
+
+        <h1>Welcome, {{ user.email }}</h1>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h3>Account Status</h3>
+                {% if user.deposit_verified %}
+                <div class="status verified">✓ Verified - Full Access Granted</div>
+                <p>You have full access to live trading signals and Telegram channel.</p>
+                <a href="#" class="btn">Join Telegram Channel</a>
+                {% else %}
+                <div class="status unverified">⚠ Verification Required</div>
+                <p>To access free signals:</p>
+                <ol style="color: #6B7A99; margin: 15px 0; line-height: 1.8;">
+                    <li>Create broker account</li>
+                    <li>Deposit minimum $10</li>
+                    <li>Verify your deposit</li>
+                </ol>
+                <a href="/broker-signup" class="btn" target="_blank">Create Broker Account</a>
+                <a href="#" class="btn secondary" onclick="verifyDeposit()">Verify Deposit</a>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <h3>Trading Stats</h3>
+                <p>View performance metrics and signal history.</p>
+                <a href="#" class="btn secondary">View Statistics</a>
+            </div>
+        </div>
+
+        <section class="signals">
+            <h2>Recent Signals</h2>
+            {% for signal in signals %}
+            <div class="signal-card">
+                <strong>{{ signal.type }} - {{ signal.pair }}</strong>
+                <span style="color: #6B7A99; margin-left: 20px;">${{ signal.price }}</span>
+            </div>
+            {% endfor %}
+        </section>
+    </div>
+
+    <script>
+        function verifyDeposit() {
+            const amount = prompt('Enter your deposit amount ($):');
+            if (amount && parseFloat(amount) >= 10) {
+                fetch('/verify-deposit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `amount=${amount}`
+                })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.status === 'success') {
+                        location.reload();
+                    }
+                });
+            } else {
+                alert('Minimum deposit is $10');
+            }
+        }
+    </script>
+</body>
+</html>
