@@ -27,6 +27,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv()
 
@@ -35,6 +36,28 @@ load_dotenv()
 # ══════════════════════════════════════════
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID        = os.getenv("TELEGRAM_CHANNEL_ID", "")
+MONGO_URI      = os.getenv("MONGO_URI", "")
+
+# ── Mongo (best-effort; bot still runs if DB is down) ──
+_db = None
+try:
+    if MONGO_URI:
+        _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        _db = _client["vedatrader"]
+        _db.command("ping")
+        print("[MongoDB] connected")
+except Exception as _e:
+    print(f"[MongoDB] connection failed: {_e}")
+    _db = None
+
+def _signals_col():
+    return _db["signals"] if _db is not None else None
+
+def _status_col():
+    return _db["bot_status"] if _db is not None else None
+
+def _errors_col():
+    return _db["scan_errors"] if _db is not None else None
 
 TIMEFRAME     = "5m"
 LOOKBACK_DAYS = 2
@@ -54,10 +77,10 @@ RSI_SEL_MAX = 70
 VOL_MIN       = 0.40
 RISK_REWARD   = 2.0
 STOP_PERCENT  = 0.3
-DEDUPE_MIN    = 20
+DEDUPE_MIN    = 10
 
-# Expiration window for binary-style signals (matches scan timeframe)
-EXPIRY_MINUTES = 5
+# Expiration window for binary-style scalping signals
+EXPIRY_MINUTES = 2
 
 # ══════════════════════════════════════════
 #  18-PAIR UNIVERSE
@@ -363,23 +386,19 @@ def fmt_signal(sig: dict) -> str:
     label   = "CALL" if is_buy else "PUT"
     now = datetime.now(timezone.utc)
     now_str = now.strftime("%H:%M")
-    
-    # Calculate expiration and Gale times
-    t5  = now.replace(second=0, microsecond=0) + timedelta(minutes=5)
-    t10 = now.replace(second=0, microsecond=0) + timedelta(minutes=10)
-    t15 = now.replace(second=0, microsecond=0) + timedelta(minutes=15)
-    
-    t5_str  = t5.strftime("%H:%M")
-    t10_str = t10.strftime("%H:%M")
-    t15_str = t15.strftime("%H:%M")
+
+    base = now.replace(second=0, microsecond=0)
+    t1 = (base + timedelta(minutes=EXPIRY_MINUTES)).strftime("%H:%M")
+    t2 = (base + timedelta(minutes=EXPIRY_MINUTES * 2)).strftime("%H:%M")
+    t3 = (base + timedelta(minutes=EXPIRY_MINUTES * 3)).strftime("%H:%M")
 
     return (
-        f"💰5-minute expiration\n"
+        f"💰{EXPIRY_MINUTES}-minute expiration\n"
         f"{sig['pair']}; {now_str}; {label} {color}\n"
         f"\n"
-        f"🕐 TIME TO {t5_str}\n"
-        f"1st GALE —> TIME TO {t10_str}\n"
-        f"2nd GALE — TIME TO {t15_str}"
+        f"🕐 TIME TO {t1}\n"
+        f"1st GALE —> TIME TO {t2}\n"
+        f"2nd GALE — TIME TO {t3}"
     )
 
 
@@ -537,6 +556,56 @@ def maybe_send_pre_session_alert():
 # ══════════════════════════════════════════
 #  MAIN SCAN
 # ══════════════════════════════════════════
+def _record_signal_db(sig: dict, telegram_ok: bool):
+    col = _signals_col()
+    if col is None: return
+    try:
+        col.insert_one({
+            "type": sig["type"],
+            "pair": sig["pair"],
+            "price": float(sig["price"]),
+            "sl": sig["sl"], "tp": sig["tp"],
+            "rsi": sig["rsi"], "vol": sig["vol"],
+            "strength": sig["strength"],
+            "trigger": sig.get("trigger", "CROSS"),
+            "expiry_minutes": EXPIRY_MINUTES,
+            "telegram_ok": bool(telegram_ok),
+            "timestamp": datetime.now(timezone.utc),
+        })
+    except Exception as e:
+        print(f"  [DB signal write] {e}")
+
+def _record_status(sess: str, pairs_scanned: int, signals_found: int, errors: list):
+    col = _status_col()
+    if col is None: return
+    try:
+        col.update_one(
+            {"_id": "latest"},
+            {"$set": {
+                "last_scan_at": datetime.now(timezone.utc),
+                "session": sess,
+                "pairs_scanned": pairs_scanned,
+                "signals_found": signals_found,
+                "errors_in_scan": len(errors),
+            },
+             "$inc": {"total_scans": 1, "total_signals": signals_found}},
+            upsert=True,
+        )
+    except Exception as e:
+        print(f"  [DB status write] {e}")
+
+def _record_error(pair: str, err: str):
+    col = _errors_col()
+    if col is None: return
+    try:
+        col.insert_one({
+            "pair": pair, "error": str(err)[:500],
+            "timestamp": datetime.now(timezone.utc),
+        })
+    except Exception:
+        pass
+
+
 def scan_markets():
     now_str = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
     sess    = current_session()
@@ -547,15 +616,22 @@ def scan_markets():
     maybe_send_pre_session_alert()
 
     signals_found = 0
-    approaching: list[tuple] = []
+    scan_errors: list = []
 
     for p in pairs:
         name = p["name"]
-        sig  = analyze(p)   # also populates pair_status[name]
+        try:
+            sig = analyze(p)   # also populates pair_status[name]
+        except Exception as e:
+            print(f"  [analyze error] {name}: {e}")
+            _record_error(name, e)
+            scan_errors.append(name)
+            continue
 
         if sig:
             ok = send_telegram(fmt_signal(sig))
             record_sig(name, sig["type"], sig["price"])
+            _record_signal_db(sig, ok)
             arrow = "▲" if sig["type"] == "BUY" else "▼"
             print(f"  [{arrow} {sig['type']} {'✓' if ok else '✗'}] {name}  RSI={sig['rsi']}  Vol={sig['vol']}x")
             signals_found += 1
@@ -563,18 +639,17 @@ def scan_markets():
         else:
             status = pair_status.get(name, {})
             ca     = status.get("candles_away", 99)
-            dr     = status.get("direction", "")
-            if 1 <= ca <= 3:
-                approaching.append((name, dr, ca))
             print(f"  [no signal] {name}  {f'⚡ ~{ca}c' if ca <= 5 else ''}")
 
         time.sleep(0.4)
+
+    # Persist scan status (last cron run, counts, error count)
+    _record_status(sess, len(pairs), signals_found, scan_errors)
 
     # Send end-of-session report if this is the final candle
     if is_session_ending() and session_signals:
         send_telegram(fmt_session_report())
         print(f"  [SESSION REPORT] Sent with {len(session_signals)} signals")
-        # Clear signals for next session
         session_signals.clear()
 
     if not signals_found:

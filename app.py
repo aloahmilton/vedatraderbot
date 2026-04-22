@@ -97,6 +97,31 @@ def verify_deposit():
 
     return jsonify({'status': 'error', 'message': 'Minimum deposit is $10'})
 
+@app.route('/bot-status')
+def bot_status():
+    status_doc = db['bot_status'].find_one({'_id': 'latest'}) or {}
+    recent_errors = list(db['scan_errors'].find().sort('timestamp', -1).limit(10))
+    recent_signals = list(signals_collection.find().sort('timestamp', -1).limit(20))
+
+    delivered = sum(1 for s in recent_signals if s.get('telegram_ok'))
+    failed = sum(1 for s in recent_signals if s.get('telegram_ok') is False)
+
+    last_run = status_doc.get('last_scan_at')
+    seconds_ago = None
+    if last_run:
+        seconds_ago = int((datetime.utcnow() - last_run).total_seconds())
+
+    return render_template(
+        'bot_status.html',
+        status=status_doc,
+        last_run=last_run,
+        seconds_ago=seconds_ago,
+        recent_errors=recent_errors,
+        recent_signals=recent_signals,
+        delivered=delivered,
+        failed=failed,
+    )
+
 @app.route('/broker-signup')
 def broker_signup():
     return redirect(AFFILIATE_LINK)

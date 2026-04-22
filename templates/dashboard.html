@@ -64,7 +64,21 @@
 .signal-tag.BUY, .signal-tag.CALL { color: var(--green); border: 1px solid rgba(27,210,155,0.35); }
 .signal-tag.SELL, .signal-tag.PUT { color: var(--red); border: 1px solid rgba(255,85,119,0.35); }
 .signal-pair { font-weight: 600; letter-spacing: 0.06em; }
-.signal-card .right { color: var(--mute); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.signal-card .right { color: var(--mute); font-size: 0.88rem; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 12px; }
+
+.tg-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px; border: 1px solid;
+}
+.tg-badge .d { width: 6px; height: 6px; border-radius: 50%; }
+.tg-ok { color: var(--green); border-color: rgba(27,210,155,0.35); background: rgba(27,210,155,0.06); }
+.tg-ok .d { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.tg-fail { color: var(--red); border-color: rgba(255,85,119,0.4); background: rgba(255,85,119,0.06); }
+.tg-fail .d { background: var(--red); }
+.tg-pending { color: var(--gold-1); border-color: rgba(212,175,55,0.35); background: rgba(212,175,55,0.05); }
+.tg-pending .d { background: var(--gold-2); }
+
 .empty { text-align: center; color: var(--mute); padding: 30px; font-size: 0.92rem; }
 {% endblock %}
 
@@ -73,6 +87,7 @@
     <a href="/" style="text-decoration:none;" class="brand">VEDA · TRADER</a>
     <nav>
         <a href="/dashboard">Dashboard</a>
+        <a href="/bot-status">Bot Status</a>
         <a href="/logout">Logout</a>
     </nav>
 </div>
@@ -122,6 +137,13 @@
             <div class="left">
                 <span class="signal-tag {{ signal.type }}">{{ signal.type }}</span>
                 <span class="signal-pair">{{ signal.pair }}</span>
+                {% if signal.telegram_ok %}
+                    <span class="tg-badge tg-ok"><span class="d"></span> Sent</span>
+                {% elif signal.telegram_ok is sameas false %}
+                    <span class="tg-badge tg-fail"><span class="d"></span> Failed</span>
+                {% else %}
+                    <span class="tg-badge tg-pending"><span class="d"></span> Pending</span>
+                {% endif %}
             </div>
             <div class="right">{{ '%.5f'|format(signal.price) if signal.price else '' }}</div>
         </div>

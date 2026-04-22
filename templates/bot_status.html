@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Bot Status — Veda Trader{% endblock %}
+{% block extra_style %}
+.welcome { padding: 30px 0 10px; }
+.welcome .crest { font-family: 'Cinzel', serif; letter-spacing: 0.4em; color: var(--gold-2); font-size: 0.72rem; margin-bottom: 8px; }
+.welcome h1 {
+    font-family: 'Cinzel', serif; letter-spacing: 0.12em;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    background: linear-gradient(180deg, #fff7d6, #d4af37 70%, #8a6a14);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 26px 0; }
+.kpi {
+    background: linear-gradient(180deg, #0c0c0f, #050507);
+    border: 1px solid var(--gold-soft);
+    border-radius: 14px; padding: 22px;
+    text-align: center;
+}
+.kpi .lbl { color: var(--mute); font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 10px; }
+.kpi .val { font-family: 'Cinzel', serif; font-size: 1.9rem; color: var(--gold-1); text-shadow: 0 0 14px rgba(212,175,55,0.35); }
+.kpi .val.green { color: var(--green); text-shadow: 0 0 14px rgba(27,210,155,0.4); }
+.kpi .val.red { color: var(--red); text-shadow: 0 0 14px rgba(255,85,119,0.4); }
+.kpi .sub { color: var(--mute); font-size: 0.78rem; margin-top: 6px; letter-spacing: 0.05em; }
+
+.health-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 999px;
+    font-size: 0.78rem; letter-spacing: 0.16em; text-transform: uppercase;
+    border: 1px solid;
+}
+.health-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+.health-badge.healthy { color: var(--green); border-color: rgba(27,210,155,0.4); background: rgba(27,210,155,0.05); }
+.health-badge.healthy .dot { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.6s infinite; }
+.health-badge.stale { color: var(--gold-1); border-color: rgba(212,175,55,0.4); background: rgba(212,175,55,0.05); }
+.health-badge.stale .dot { background: var(--gold-2); }
+.health-badge.down { color: var(--red); border-color: rgba(255,85,119,0.4); background: rgba(255,85,119,0.05); }
+.health-badge.down .dot { background: var(--red); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.section-title {
+    font-family: 'Cinzel', serif; letter-spacing: 0.18em;
+    color: var(--gold-1); font-size: 1rem; margin: 30px 0 16px;
+    display: flex; align-items: center; gap: 12px;
+}
+.section-title::before, .section-title::after {
+    content: ""; flex: 1; height: 1px; background: var(--gold-line); opacity: 0.5;
+}
+
+.row {
+    background: linear-gradient(180deg, #0a0a0c, #050507);
+    border: 1px solid var(--gold-soft);
+    border-radius: 12px; padding: 14px 18px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    transition: border-color .2s, box-shadow .2s;
+}
+.row:hover { border-color: var(--gold-2); box-shadow: 0 0 18px rgba(212,175,55,0.15); }
+.row .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.row .right { color: var(--mute); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.signal-tag {
+    font-family: 'Cinzel', serif; letter-spacing: 0.18em; font-size: 0.7rem;
+    padding: 5px 11px; border-radius: 999px;
+}
+.signal-tag.BUY { color: var(--green); border: 1px solid rgba(27,210,155,0.35); }
+.signal-tag.SELL { color: var(--red); border: 1px solid rgba(255,85,119,0.35); }
+.pair { font-weight: 600; letter-spacing: 0.06em; }
+
+.tg-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; border: 1px solid;
+}
+.tg-badge .d { width: 6px; height: 6px; border-radius: 50%; }
+.tg-ok { color: var(--green); border-color: rgba(27,210,155,0.35); background: rgba(27,210,155,0.06); }
+.tg-ok .d { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.tg-fail { color: var(--red); border-color: rgba(255,85,119,0.4); background: rgba(255,85,119,0.06); }
+.tg-fail .d { background: var(--red); }
+.tg-pending { color: var(--gold-1); border-color: rgba(212,175,55,0.35); background: rgba(212,175,55,0.05); }
+.tg-pending .d { background: var(--gold-2); }
+
+.err-row { border-color: rgba(255,85,119,0.25); }
+.err-row .msg { color: #ff8aa1; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.82rem; }
+
+.empty { text-align: center; color: var(--mute); padding: 24px; font-size: 0.9rem; }
+{% endblock %}
+
+{% block content %}
+<div class="topbar">
+    <a href="/" style="text-decoration:none;" class="brand">VEDA · TRADER</a>
+    <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/bot-status">Bot Status</a>
+        <a href="/logout">Logout</a>
+    </nav>
+</div>
+
+<section class="welcome">
+    <div class="crest">— OPERATIONS DESK —</div>
+    <h1>Bot Status</h1>
+    <div style="margin-top: 14px;">
+        {% if seconds_ago is none %}
+            <span class="health-badge down"><span class="dot"></span> No data yet</span>
+        {% elif seconds_ago < 360 %}
+            <span class="health-badge healthy"><span class="dot"></span> Healthy · scan {{ seconds_ago }}s ago</span>
+        {% elif seconds_ago < 900 %}
+            <span class="health-badge stale"><span class="dot"></span> Stale · {{ (seconds_ago // 60) }} min ago</span>
+        {% else %}
+            <span class="health-badge down"><span class="dot"></span> Down · {{ (seconds_ago // 60) }} min ago</span>
+        {% endif %}
+    </div>
+</section>
+
+<div class="gold-line"></div>
+
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="lbl">Last Run</div>
+        <div class="val" style="font-size:1.2rem;">{{ last_run.strftime('%H:%M:%S') if last_run else '—' }}</div>
+        <div class="sub">{{ last_run.strftime('%d %b %Y UTC') if last_run else 'Awaiting first scan' }}</div>
+    </div>
+    <div class="kpi">
+        <div class="lbl">Session</div>
+        <div class="val" style="font-size:1.2rem;">{{ status.session|upper if status.session else '—' }}</div>
+        <div class="sub">{{ status.pairs_scanned or 0 }} pairs scanned</div>
+    </div>
+    <div class="kpi">
+        <div class="lbl">Last Scan Signals</div>
+        <div class="val">{{ status.signals_found or 0 }}</div>
+        <div class="sub">total: {{ status.total_signals or 0 }}</div>
+    </div>
+    <div class="kpi">
+        <div class="lbl">Total Scans</div>
+        <div class="val">{{ status.total_scans or 0 }}</div>
+        <div class="sub">errors last scan: {{ status.errors_in_scan or 0 }}</div>
+    </div>
+    <div class="kpi">
+        <div class="lbl">Telegram Delivered</div>
+        <div class="val green">{{ delivered }}</div>
+        <div class="sub">of last 20 signals</div>
+    </div>
+    <div class="kpi">
+        <div class="lbl">Telegram Failed</div>
+        <div class="val {{ 'red' if failed else '' }}">{{ failed }}</div>
+        <div class="sub">of last 20 signals</div>
+    </div>
+</div>
+
+<div class="section-title">Recent Signals</div>
+{% if recent_signals %}
+    {% for s in recent_signals %}
+    <div class="row">
+        <div class="left">
+            <span class="signal-tag {{ s.type }}">{{ s.type }}</span>
+            <span class="pair">{{ s.pair }}</span>
+            {% if s.telegram_ok %}
+                <span class="tg-badge tg-ok"><span class="d"></span> Sent</span>
+            {% elif s.telegram_ok is sameas false %}
+                <span class="tg-badge tg-fail"><span class="d"></span> Failed</span>
+            {% else %}
+                <span class="tg-badge tg-pending"><span class="d"></span> Pending</span>
+            {% endif %}
+        </div>
+        <div class="right">
+            {{ '%.5f'|format(s.price) }} ·
+            {{ s.timestamp.strftime('%d %b %H:%M UTC') if s.timestamp else '' }}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="row empty">No signals recorded yet.</div>
+{% endif %}
+
+<div class="section-title">Scan Errors</div>
+{% if recent_errors %}
+    {% for e in recent_errors %}
+    <div class="row err-row">
+        <div class="left">
+            <span class="pair">{{ e.pair }}</span>
+            <span class="msg">{{ e.error }}</span>
+        </div>
+        <div class="right">{{ e.timestamp.strftime('%d %b %H:%M UTC') if e.timestamp else '' }}</div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="row empty">No errors. The desk is clean.</div>
+{% endif %}
+
+<footer>
+    <span class="cinzel">VEDA · TRADER</span><br><br>
+    &copy; 2026 — Operations Desk
+</footer>
+{% endblock %}
