@@ -39,7 +39,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python bot_service.py"
+args = "python main.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
