@@ -228,11 +228,20 @@ def fmt_result_msg(s: dict):
         f"<code>{s['price']:.5f} → {s['exit_price']:.5f}  ({sign}{pct:.2f}%)</code>"
     )
 
+def answer_callback_query(callback_query_id: str, text: str = None):
+    """Answer a callback query to dismiss loading state"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/answerCallbackQuery"
+    payload = {"callback_query_id": callback_query_id}
+    if text:
+        payload["text"] = text
+    requests.post(url, json=payload)
+
 def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: bool):
     try:
         # Handle Callback Queries (Button Clicks)
         if "callback_query" in update:
             cb = update["callback_query"]
+            callback_id = cb["id"]
             chat_id = str(cb["message"]["chat"]["id"])
             user_id = str(cb["from"]["id"])
             data = cb["data"]
@@ -248,6 +257,7 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                 }
                 msg = "💎 <b>PREMIUM HUB</b>\n\nSelect a category to view the latest high-accuracy signals:"
                 send_telegram_func(msg, chat_id=chat_id, reply_markup=markup)
+                answer_callback_query(callback_id)
             
             elif data.startswith("cat_"):
                 category = data.replace("cat_", "")
@@ -266,11 +276,27 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                 else:
                     msg = "🚫 <b>ACCESS DENIED</b>\n\nThis category is reserved for <b>GOLD Members</b>.\n\nClick /start to see subscription options."
                     send_telegram_func(msg, chat_id=chat_id)
+                answer_callback_query(callback_id)
             
+            elif data == "gold_info":
+                msg = (
+                    "👑 <b>GOLD MEMBERSHIP INFO</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    "🎯 <b>Premium Features:</b>\n"
+                    "• Access to Stocks, Indices & Crypto signals\n"
+                    "• Higher accuracy signals (80-95% score)\n"
+                    "• Real-time market scanning\n"
+                    "• Exclusive gold-tier signals\n\n"
+                    "💰 <b>Pricing:</b> Contact admin for details\n\n"
+                    "📞 Use /start to begin upgrade process"
+                )
+                send_telegram_func(msg, chat_id=chat_id)
+                answer_callback_query(callback_id)
+
             elif data == "back_to_start":
                 # Trigger /start logic
                 return handle_telegram_command({"message": {"chat": {"id": chat_id}, "from": {"id": user_id}, "text": "/start"}}, send_telegram_func, PREMIUM_ENABLED)
-                
+
             return
 
         message = update.get("message", {})
