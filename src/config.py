@@ -62,40 +62,36 @@ GOLD_SCORE_THRESHOLD = 85
 #  PAIR UNIVERSE
 # ══════════════════════════════════════════
 ALL_PAIRS = [
-    {"name": "EUR/USD", "ticker": "EURUSD=X", "session": "all"},
-    {"name": "GBP/USD", "ticker": "GBPUSD=X", "session": "all"},
-    {"name": "USD/JPY", "ticker": "USDJPY=X", "session": "all"},
-    {"name": "USD/CAD", "ticker": "USDCAD=X", "session": "all"},
-    {"name": "AUD/USD", "ticker": "AUDUSD=X", "session": "all"},
-    {"name": "NZD/USD", "ticker": "NZDUSD=X", "session": "all"},
-    {"name": "USD/CHF", "ticker": "USDCHF=X", "session": "all"},
-    {"name": "EUR/GBP", "ticker": "EURGBP=X", "session": "london"},
-    {"name": "EUR/JPY", "ticker": "EURJPY=X", "session": "london"},
-    {"name": "GBP/JPY", "ticker": "GBPJPY=X", "session": "london"},
-    {"name": "EUR/CHF", "ticker": "EURCHF=X", "session": "london"},
-    {"name": "GBP/CHF", "ticker": "GBPCHF=X", "session": "london"},
-    {"name": "EUR/CAD", "ticker": "EURCAD=X", "session": "newyork"},
-    {"name": "GBP/CAD", "ticker": "GBPCAD=X", "session": "newyork"},
-    {"name": "CAD/JPY", "ticker": "CADJPY=X", "session": "newyork"},
-    {"name": "AUD/JPY", "ticker": "AUDJPY=X", "session": "asian"},
-    {"name": "NZD/JPY", "ticker": "NZDJPY=X", "session": "asian"},
-    {"name": "AUD/NZD", "ticker": "AUDNZD=X", "session": "asian"},
+    {"name": "EUR/USD", "ticker": "EURUSD=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "GBP/USD", "ticker": "GBPUSD=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "USD/JPY", "ticker": "USDJPY=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "USD/CAD", "ticker": "USDCAD=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "AUD/USD", "ticker": "AUDUSD=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "NZD/USD", "ticker": "NZDUSD=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "USD/CHF", "ticker": "USDCHF=X", "session": "all", "tier": "public",  "category": "forex"},
+    {"name": "EUR/GBP", "ticker": "EURGBP=X", "session": "london", "tier": "public", "category": "forex"},
+    {"name": "EUR/JPY", "ticker": "EURJPY=X", "session": "london", "tier": "public", "category": "forex"},
+    {"name": "GBP/JPY", "ticker": "GBPJPY=X", "session": "london", "tier": "public", "category": "forex"},
+    {"name": "EUR/CHF", "ticker": "EURCHF=X", "session": "london", "tier": "public", "category": "forex"},
+    {"name": "GBP/CHF", "ticker": "GBPCHF=X", "session": "london", "tier": "public", "category": "forex"},
+    {"name": "EUR/CAD", "ticker": "EURCAD=X", "session": "newyork", "tier": "public", "category": "forex"},
+    {"name": "GBP/CAD", "ticker": "GBPCAD=X", "session": "newyork", "tier": "public", "category": "forex"},
+    {"name": "CAD/JPY", "ticker": "CADJPY=X", "session": "newyork", "tier": "public", "category": "forex"},
+    {"name": "AUD/JPY", "ticker": "AUDJPY=X", "session": "asian", "tier": "public", "category": "forex"},
+    {"name": "NZD/JPY", "ticker": "NZDJPY=X", "session": "asian", "tier": "public", "category": "forex"},
+    {"name": "AUD/NZD", "ticker": "AUDNZD=X", "session": "asian", "tier": "public", "category": "forex"},
     
-    # 💎 HIGH-VALUE INDICES & COMMODITIES
-    {"name": "US30",    "ticker": "^DJI",     "session": "newyork"},
-    {"name": "NAS100",  "ticker": "^IXIC",    "session": "newyork"},
-    {"name": "GER40",   "ticker": "^GDAXI",   "session": "london"},
-    {"name": "GOLD",    "ticker": "GC=F",     "session": "all"},
-    {"name": "USOIL",   "ticker": "CL=F",     "session": "newyork"},
-    
-    # 🚀 PREMIUM STOCKS
-    {"name": "NVDA",    "ticker": "NVDA",     "session": "newyork"},
-    {"name": "TSLA",    "ticker": "TSLA",     "session": "newyork"},
-    {"name": "AAPL",    "ticker": "AAPL",     "session": "newyork"},
-    
-    # ₿ CRYPTO
-    {"name": "BTC/USD", "ticker": "BTC-USD",  "session": "all"},
-    {"name": "ETH/USD", "ticker": "ETH-USD",  "session": "all"},
+    # 💎 PREMIUM ASSETS
+    {"name": "US30",    "ticker": "^DJI",     "session": "newyork", "tier": "premium", "category": "indices"},
+    {"name": "NAS100",  "ticker": "^IXIC",    "session": "newyork", "tier": "premium", "category": "indices"},
+    {"name": "GER40",   "ticker": "^GDAXI",   "session": "london",  "tier": "premium", "category": "indices"},
+    {"name": "GOLD",    "ticker": "GC=F",     "session": "all",     "tier": "premium", "category": "commodities"},
+    {"name": "USOIL",   "ticker": "CL=F",     "session": "newyork", "tier": "premium", "category": "commodities"},
+    {"name": "NVDA",    "ticker": "NVDA",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "TSLA",    "ticker": "TSLA",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "AAPL",    "ticker": "AAPL",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "BTC/USD", "ticker": "BTC-USD",  "session": "all",     "tier": "premium", "category": "crypto"},
+    {"name": "ETH/USD", "ticker": "ETH-USD",  "session": "all",     "tier": "premium", "category": "crypto"},
 ]
 
 # ══════════════════════════════════════════

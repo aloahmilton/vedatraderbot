@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timezone
 from src.config import (
     pairs_for_session, current_session, session_label, 
-    TELEGRAM_TOKEN, ALL_PAIRS, GOLD_CHAT_ID, PREMIUM_ENABLED
+    TELEGRAM_TOKEN, ALL_PAIRS
 )
 from src.engine import analyze_pair, evaluate_pending_signals
 from src.notifier import (
@@ -13,7 +13,15 @@ from src.notifier import (
 )
 from src.database import save_signal_to_db, record_signal_state
 
-# Premium system initialized from config
+# Premium system - integrated modularly
+try:
+    from src import premium
+    GOLD_CHAT_ID = premium.GOLD_CHAT_ID
+    PREMIUM_ENABLED = premium.PREMIUM_ENABLED
+except ImportError:
+    GOLD_CHAT_ID = None
+    PREMIUM_ENABLED = False
+
 
 # Global State
 session_signals = []
@@ -45,18 +53,28 @@ def scan_markets():
         if sig:
             sig["no"] = len(session_signals) + 1
             sig["timestamp"] = datetime.now(timezone.utc)
-            sig["direction"] = sig["type"] # consistency
+            sig["direction"] = sig["type"] 
+            sig["tier"] = p.get("tier", "public") # Save the tier!
             
-            if send_telegram(fmt_signal(sig, sig["no"])):
-                session_signals.append(sig)
+            # 📢 Public Channel Delivery (Only for Public Assets)
+            if sig["tier"] == "public":
+                if send_telegram(fmt_signal(sig, sig["no"])):
+                    session_signals.append(sig)
+                    save_signal_to_db(sig)
+                    record_signal_state(sig["pair"], sig["type"])
+                    print(f"  [PUBLIC SIGNAL] {sig['pair']} {sig['type']} sent (Score: {sig['score']}).")
+            
+            # 💎 Premium Internal Logging (Indices, Stocks, etc.)
+            else:
+                session_signals.append(sig) # Still track it for reports
                 save_signal_to_db(sig)
                 record_signal_state(sig["pair"], sig["type"])
-                print(f"  [SIGNAL] {sig['pair']} {sig['type']} sent (Score: {sig['score']}).")
+                print(f"  [PREMIUM LOGGED] {sig['pair']} {sig['type']} saved to DB (Score: {sig['score']}).")
                 
-                # Handle Gold Signal
-                if sig.get("is_gold") and PREMIUM_ENABLED:
+                # Still handle Gold Signal alert if you want it sent to a PRIVATE channel
+                if sig.get("is_gold") and PREMIUM_ENABLED and GOLD_CHAT_ID:
                     send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=GOLD_CHAT_ID)
-                    print(f"  [GOLD] Sent to premium channel.")
+                    print(f"  [GOLD] Sent to private channel.")
         time.sleep(0.5)
 
     # 4. Session Report

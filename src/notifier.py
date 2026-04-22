@@ -2,7 +2,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from .config import TELEGRAM_TOKEN, CHAT_ID, EXPIRY_MINUTES, current_session, session_label, ALL_PAIRS
 
-def send_telegram(msg: str, pin: bool = False, chat_id: str = None) -> bool:
+def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) -> bool:
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     target_chat = chat_id if chat_id is not None else CHAT_ID
     payload = {
@@ -11,6 +11,8 @@ def send_telegram(msg: str, pin: bool = False, chat_id: str = None) -> bool:
         "parse_mode": "HTML", 
         "disable_web_page_preview": True
     }
+    if "reply_markup" in kwargs:
+        payload["reply_markup"] = kwargs["reply_markup"]
     try:
         r = requests.post(url, json=payload, timeout=15)
         res = r.json()
@@ -81,7 +83,9 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
         f"📈  RSI <code>{sig['rsi']}</code>  ·  ADX <code>{sig['adx']}</code>  ·  ATR <code>{sig['atr_bps']} bps</code>\n"
         f"🧭  15M Trend: <b>{sig['trend']}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
-        f"<i>Result posted in {EXPIRY_MINUTES + 1} min. Trade responsibly.</i>"
+        f"<i>Result posted in {EXPIRY_MINUTES + 1} min. Trade responsibly.</i>\n\n"
+        f"ⓘ <b>Trade Stocks, Indices & Crypto?</b>\n"
+        f"👉 <b>Click /start to upgrade to GOLD</b>"
     )
 
 def fmt_gold_signal(sig: dict, sig_no: int = 0):
@@ -205,32 +209,77 @@ def fmt_result_msg(s: dict):
 
 def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: bool):
     try:
+        # Handle Callback Queries (Button Clicks)
+        if "callback_query" in update:
+            cb = update["callback_query"]
+            chat_id = str(cb["message"]["chat"]["id"])
+            user_id = str(cb["from"]["id"])
+            data = cb["data"]
+            
+            if data == "view_premium":
+                markup = {
+                    "inline_keyboard": [
+                        [{"text": "📊 Stocks", "callback_data": "cat_stocks"}, {"text": "₿ Crypto", "callback_data": "cat_crypto"}],
+                        [{"text": "🏛 Indices", "callback_data": "cat_indices"}, {"text": "🥇 Gold Assets", "callback_data": "cat_commodities"}],
+                        [{"text": "🏆 Elite Gold Signals", "callback_data": "cat_gold"}],
+                        [{"text": "⬅️ Back", "callback_data": "back_to_start"}]
+                    ]
+                }
+                msg = "💎 <b>PREMIUM HUB</b>\n\nSelect a category to view the latest high-accuracy signals:"
+                send_telegram_func(msg, chat_id=chat_id, reply_markup=markup)
+            
+            elif data.startswith("cat_"):
+                category = data.replace("cat_", "")
+                from .premium import is_gold_user
+                if is_gold_user(user_id):
+                    from .database import get_recent_premium_signals
+                    sigs = get_recent_premium_signals(category=category, limit=3)
+                    cat_name = category.upper()
+                    if not sigs:
+                        send_telegram_func(f"💎 <b>{cat_name} HUB</b>\n\nNo active signals in this category at the moment. Scanning markets...", chat_id=chat_id)
+                    else:
+                        msg = f"💎 <b>LATEST {cat_name} SIGNALS</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+                        for s in sigs:
+                            msg += f"\n✨ <b>{s['pair']}</b> ({s['type']})\nScore: <b>{s['score']}/100</b>\nPrice: <code>{s['price']:.5f}</code>\n"
+                        send_telegram_func(msg, chat_id=chat_id)
+                else:
+                    msg = "🚫 <b>ACCESS DENIED</b>\n\nThis category is reserved for <b>GOLD Members</b>.\n\nClick /start to see subscription options."
+                    send_telegram_func(msg, chat_id=chat_id)
+            
+            elif data == "back_to_start":
+                # Trigger /start logic
+                return handle_telegram_command({"message": {"chat": {"id": chat_id}, "from": {"id": user_id}, "text": "/start"}}, send_telegram_func, PREMIUM_ENABLED)
+                
+            return
+
         message = update.get("message", {})
         chat_id = str(message.get("chat", {}).get("id"))
+        user_id = str(message.get("from", {}).get("id"))
         username = message.get("from", {}).get("username", "Unknown")
         text = message.get("text", "")
 
         if text == "/start":
+            markup = {
+                "inline_keyboard": [
+                    [{"text": "📊 Free Signals Channel", "url": f"https://t.me/{CHAT_ID.replace('-100','')}" if CHAT_ID.startswith('-100') else "https://t.me/VedaTrader"}],
+                    [{"text": "💎 View Premium Assets", "callback_data": "view_premium"}],
+                    [{"text": "👑 Membership Info", "callback_data": "gold_info"}]
+                ]
+            }
             welcome_msg = (
                 f"🎯 <b>VEDA TRADER BOT v5</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"\n"
                 f"✅ <b>Active & Scanning Markets</b>\n"
                 f"\n"
-                f"📊 Monitoring {len(ALL_PAIRS)} currency pairs & assets\n"
-                f"⏰ Signals every 5 minutes\n"
-                f"🌍 3 trading sessions\n"
-                f"\n"
-                f"👑 <b>GOLD Premium Available</b>\n"
-                f"   • 85%+ win rate signals\n"
-                f"   • Elite high-value asset picks\n"
-                f"   • Private channel delivery\n"
-                f"\n"
-                f"Use /gold to check premium status"
+                f"Use the buttons below to access our automated trading hub."
             )
-            send_telegram_func(welcome_msg, chat_id=chat_id)
+            send_telegram_func(welcome_msg, chat_id=chat_id, reply_markup=markup)
 
         elif text == "/status":
+            markup = {"inline_keyboard": [[{"text": "🔄 Refresh", "callback_data": "view_premium"}]]}
+            from .premium import is_gold_user
+            has_gold = is_gold_user(user_id)
             status_msg = (
                 f"📊 <b>BOT STATUS</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -238,52 +287,19 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                 f"✅ <b>ONLINE & ACTIVE</b>\n"
                 f"\n"
                 f"🌍 Session: {session_label(current_session())}\n"
-                f"📈 Assets: {len(ALL_PAIRS)}\n"
-                f"👑 Premium: {'Enabled' if PREMIUM_ENABLED else 'Disabled'}\n"
+                f"👑 Your Status: {'💎 GOLD MEMBER' if has_gold else '🆓 FREE TIER'}\n"
             )
-            send_telegram_func(status_msg, chat_id=chat_id)
+            send_telegram_func(status_msg, chat_id=chat_id, reply_markup=markup)
 
-        elif text == "/pairs":
-            # Group pairs by session
-            sessions = {"all": [], "london": [], "newyork": [], "asian": []}
-            for p in ALL_PAIRS:
-                sessions[p.get("session", "all")].append(p["name"])
-            
-            pairs_msg = "📊 <b>MONITORED ASSETS</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-            for sess, names in sessions.items():
-                if names:
-                    pairs_msg += f"\n<b>{sess.upper()}:</b>\n{', '.join(names)}\n"
-            send_telegram_func(pairs_msg, chat_id=chat_id)
-
-        elif text == "/gold" and PREMIUM_ENABLED:
-            try:
-                from .premium import get_gold_stats
-                active, expiring = get_gold_stats()
-                msg = (
-                    f"👑 <b>GOLD TIER STATUS</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"\n"
-                    f"✅ Active members: {active}\n"
-                    f"📊 Filters: Ultra-strict (85%+ accuracy)\n"
-                    f"\n"
-                    f"<i>Elite signals only.</i>"
-                )
-                send_telegram_func(msg, chat_id=chat_id)
-            except ImportError:
-                send_telegram_func("❌ Premium module error.", chat_id=chat_id)
-
-        elif text.startswith("/addgold ") and PREMIUM_ENABLED:
-            # Simple admin check (can be improved)
-            if chat_id.startswith("-") == False: # Private chat only
-                parts = text.split()
-                if len(parts) >= 3:
-                    target_id, days = parts[1], parts[2]
-                    try:
-                        from .premium import add_gold_user
-                        if add_gold_user(target_id, days, username):
-                            send_telegram_func(f"✅ Added {target_id} for {days} days.", chat_id=chat_id)
-                    except:
-                        send_telegram_func("❌ Failed to add user.", chat_id=chat_id)
+        elif text.startswith("/addgold "):
+            # Simple admin check - you can add your user ID here
+            # if user_id == "YOUR_ADMIN_ID":
+            parts = text.split()
+            if len(parts) >= 3:
+                target_id, days = parts[1], parts[2]
+                from .premium import add_gold_user
+                if add_gold_user(target_id, days, username):
+                    send_telegram_func(f"✅ User {target_id} updated to GOLD for {days} days.", chat_id=chat_id)
 
     except Exception as e:
         print(f"[COMMAND HANDLER] {e}")

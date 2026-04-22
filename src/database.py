@@ -53,3 +53,43 @@ def update_signal_result(pair, timestamp, result, exit_price):
             )
         except Exception as e:
             print(f"[DB Error] Update failed: {e}")
+
+# 👑 PREMIUM USER MANAGEMENT
+def get_premium_user(user_id: str):
+    db = get_db()
+    if db is not None:
+        try:
+            return db["users"].find_one({"user_id": str(user_id)})
+        except: return None
+    return None
+
+def add_premium_user(user_id: str, days: int, username: str = "Unknown"):
+    db = get_db()
+    if db is not None:
+        try:
+            from datetime import timedelta
+            expiry = datetime.now(timezone.utc) + timedelta(days=int(days))
+            db["users"].update_one(
+                {"user_id": str(user_id)},
+                {"$set": {"user_id": str(user_id), "username": username, "expiry": expiry, "active": True}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"[DB Error] Add user failed: {e}")
+            return False
+    return False
+
+def get_recent_premium_signals(category: str = None, limit: int = 5):
+    db = get_db()
+    if db is not None:
+        try:
+            query = {"tier": "premium"}
+            if category and category != "gold":
+                query["category"] = category
+            elif category == "gold":
+                query["is_gold"] = True
+                
+            return list(db["signals"].find(query).sort("timestamp", -1).limit(limit))
+        except: return []
+    return []

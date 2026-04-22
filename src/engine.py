@@ -14,6 +14,14 @@ from .indicators import (
 )
 from .database import is_dupe, update_signal_result
 
+# Premium system check
+try:
+    from . import premium
+    PREMIUM_LOADED = True
+except ImportError:
+    PREMIUM_LOADED = False
+
+
 def evaluate_pending_signals(session_signals):
     """Check signals past expiry and stamp WIN/LOSS."""
     from .notifier import send_telegram, fmt_result_msg
@@ -151,9 +159,15 @@ def analyze_pair(pair_info: dict) -> dict | None:
     sl = round(price * (1 - STOP_PERCENT/100 if direction == "BUY" else 1 + STOP_PERCENT/100), 6)
     tp = round(price * (1 + STOP_PERCENT/100*RISK_REWARD if direction == "BUY" else 1 - STOP_PERCENT/100*RISK_REWARD), 6)
 
+    # ── GOLD SIGNAL CHECK ──
+    is_gold = False
+    if PREMIUM_LOADED and premium.PREMIUM_ENABLED:
+        bb_pos = (price - bb_l.iloc[-1]) / (bb_u.iloc[-1] - bb_l.iloc[-1]) if (bb_u.iloc[-1] - bb_l.iloc[-1]) > 0 else 0.5
+        is_gold = premium.gold_signal_check(rsi_now, adx_now, hist_now, bb_pos, score)
+
     signal = {
         "type": direction, "pair": name, "price": price, "sl": sl, "tp": tp,
         "rsi": round(rsi_now, 1), "adx": round(adx_now, 1), "atr_bps": round(atr_bps, 1),
-        "score": score, "trend": trend, "is_gold": score >= GOLD_SCORE_THRESHOLD
+        "score": score, "trend": trend, "is_gold": is_gold
     }
     return signal

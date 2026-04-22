@@ -24,17 +24,28 @@ def gold_signal_check(rsi, adx, hist, bb_pos, score):
     return True
 
 def get_gold_stats():
-    """Placeholder for membership stats."""
-    # In a real implementation, this would query a database
-    return 124, 12 # active, expiring
+    """Real membership stats from DB."""
+    from .database import get_db
+    db = get_db()
+    if db is not None:
+        active = db["users"].count_documents({"active": True})
+        return active, 0
+    return 0, 0
 
 def add_gold_user(user_id, days, admin_username):
-    """Placeholder for adding a gold user."""
-    # Logic to save user_id and expiry to a database
-    print(f"[PREMIUM] Admin {admin_username} added user {user_id} for {days} days.")
-    return True
+    """Save premium user to DB."""
+    from .database import add_premium_user
+    return add_premium_user(user_id, days, admin_username)
 
 def is_gold_user(user_id):
-    """Check if a specific user has gold access."""
-    # Logic to check user against database
-    return True # Default to True for now
+    """Check if a specific user has active premium access in DB."""
+    from .database import get_premium_user
+    user = get_premium_user(user_id)
+    if not user: return False
+    
+    # Check expiry
+    from datetime import datetime, timezone
+    if user.get("expiry") and user["expiry"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        return False
+    
+    return user.get("active", False)

@@ -16,5 +16,11 @@ if os.name == 'nt':
 
 # Run the bot
 if __name__ == "__main__":
-    from bot.main import main
+    import sys
+    # Add root to path so we can import main
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+        
+    from main import main
     main()
