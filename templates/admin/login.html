@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Admin · Veda Trader{% endblock %}
+{% block content %}
+<div class="topbar">
+    <div class="brand">VEDA · ADMIN</div>
+    <nav><a href="/"><i class="fa-solid fa-house"></i> Site</a></nav>
+</div>
+
+<div class="gold-line"></div>
+
+<div style="max-width: 440px; margin: 60px auto;">
+    <div class="panel" style="text-align:center;">
+        <i class="fa-solid fa-shield-halved" style="font-size:2.4rem;color:var(--gold-2);margin-bottom:14px;text-shadow:0 0 18px rgba(212,175,55,0.4);"></i>
+        <h2 style="font-family:'Cinzel',serif;letter-spacing:0.18em;color:var(--gold-1);margin-bottom:6px;">CONTROL ROOM</h2>
+        <p style="color:var(--mute);font-size:0.85rem;letter-spacing:0.06em;margin-bottom:26px;">Authorized personnel only.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+        {% endwith %}
+
+        <form method="POST" style="text-align:left;">
+            <label style="color:var(--mute);font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;">
+                <i class="fa-solid fa-user"></i> Username
+            </label>
+            <input name="username" required autocomplete="username"
+                   style="width:100%;padding:12px 14px;margin:6px 0 16px;
+                          background:#07070a;border:1px solid var(--gold-soft);border-radius:8px;
+                          color:var(--ink);font-size:0.95rem;">
+
+            <label style="color:var(--mute);font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;">
+                <i class="fa-solid fa-lock"></i> Password
+            </label>
+            <input name="password" type="password" required autocomplete="current-password"
+                   style="width:100%;padding:12px 14px;margin:6px 0 22px;
+                          background:#07070a;border:1px solid var(--gold-soft);border-radius:8px;
+                          color:var(--ink);font-size:0.95rem;">
+
+            <button class="btn btn-gold" style="width:100%;">
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> Enter
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

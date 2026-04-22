@@ -142,7 +142,8 @@ active_session_name:  str  = ""   # last session we counted under
 # ══════════════════════════════════════════
 #  TELEGRAM
 # ══════════════════════════════════════════
-def send_telegram(msg: str) -> bool:
+def send_telegram(msg: str, pin: bool = False) -> bool:
+    """Send a Telegram message. Optionally pin it in the channel."""
     url     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": msg,
                "parse_mode": "HTML", "disable_web_page_preview": True}
@@ -152,6 +153,19 @@ def send_telegram(msg: str) -> bool:
         if not res.get("ok"):
             print(f"  [Telegram FAIL] {res.get('description')}")
             return False
+        if pin:
+            mid = res.get("result", {}).get("message_id")
+            if mid:
+                try:
+                    pin_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/pinChatMessage"
+                    pr = requests.post(pin_url, json={
+                        "chat_id": CHAT_ID, "message_id": mid,
+                        "disable_notification": True
+                    }, timeout=10).json()
+                    if not pr.get("ok"):
+                        print(f"  [Telegram PIN FAIL] {pr.get('description')}")
+                except Exception as e:
+                    print(f"  [Telegram PIN error] {e}")
         return True
     except Exception as e:
         print(f"  [Telegram Error] {e}")
@@ -303,6 +317,29 @@ def evaluate_pending_signals():
                 print(f"  [DB outcome write] {e}")
         print(f"  [OUTCOME] #{s['no']} {s['pair']} {s['direction']} → {s['result']} "
               f"(entry {entry:.5f} → exit {exit_price:.5f})")
+
+        # Send the green/red outcome bar to Telegram
+        try:
+            send_telegram(fmt_outcome_bar(s))
+        except Exception as e:
+            print(f"  [outcome telegram] {e}")
+
+
+def fmt_outcome_bar(s: dict) -> str:
+    """Short colored bar for trade result."""
+    win   = s["result"] == "WIN"
+    bar   = ("🟩" * 14) if win else ("🟥" * 14)
+    label = "GAIN ✅" if win else "LOSS ❌"
+    direc = "BUY/CALL" if s["direction"] == "BUY" else "SELL/PUT"
+    entry, exit_p = s["price"], s["exit_price"]
+    pct = (exit_p - entry) / entry * 100 * (1 if s["direction"] == "BUY" else -1)
+    sign = "+" if pct >= 0 else ""
+    return (
+        f"{bar}\n"
+        f"<b>{label}</b>  ·  #{s['no']}  ·  {s['pair']}  {direc}\n"
+        f"<code>{entry:.5f} → {exit_p:.5f}  ({sign}{pct:.2f}%)</code>\n"
+        f"{bar}"
+    )
 
 
 def calc_atr(df: pd.DataFrame, n: int = 14) -> float:
@@ -496,6 +533,53 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     )
 
 
+SESSION_META = {
+    # name: (display_label, start_h_utc, duration_h)
+    "asian":   ("ASIAN SESSION",       0,  8),
+    "london":  ("LONDON SESSION",      7,  9),
+    "overlap": ("LONDON × NY OVERLAP", 12, 4),
+    "newyork": ("NEW YORK SESSION",    13, 8),
+}
+
+WORLD_TZ = [
+    ("🇬🇧 UK",            "Europe/London"),
+    ("🇿🇦 South Africa",  "Africa/Johannesburg"),
+    ("🇪🇸 Spain",         "Europe/Madrid"),
+    ("🇧🇷 Brazil",        "America/Sao_Paulo"),
+    ("🇺🇸 Miami",         "America/New_York"),
+    ("🇲🇽 Mexico",        "America/Mexico_City"),
+    ("🇨🇴 Colombia",      "America/Bogota"),
+    ("🇳🇬 Nigeria",       "Africa/Lagos"),
+    ("🇮🇳 India",         "Asia/Kolkata"),
+    ("🇲🇾 Malaysia",      "Asia/Kuala_Lumpur"),
+    ("🇵🇭 Philippines",   "Asia/Manila"),
+]
+
+def fmt_session_announcement(sess: str) -> str:
+    """Multi-timezone session-open announcement (gets pinned)."""
+    from zoneinfo import ZoneInfo
+    label, start_h, _dur = SESSION_META.get(sess, ("SESSION", 0, 3))
+    today = datetime.now(timezone.utc).date()
+    start_utc = datetime(today.year, today.month, today.day, start_h, 0, tzinfo=timezone.utc)
+
+    lines = []
+    for flag, tz in WORLD_TZ:
+        try:
+            local = start_utc.astimezone(ZoneInfo(tz))
+            lines.append(f"{flag} – Starts at {local.strftime('%-I:%M %p')}")
+        except Exception:
+            continue
+
+    return (
+        f"🔔 <b>{label} OPENS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        + "\n".join(lines) +
+        f"\n\n⏱ Duration: 3 hours of focus\n"
+        f"🎯 5 to 7+ high-quality signals\n"
+        f"💎 Stay sharp."
+    )
+
+
 def fmt_watchlist(sess: str, pairs: list[dict], volatile: list[tuple] | None = None) -> str:
     now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
     tips = {
@@ -641,12 +725,15 @@ def maybe_send_watchlist():
     sess = current_session()
     if sess != last_session_alerted:
         pairs = pairs_for_session(sess)
-        # Rank top movers by ATR for the focus list
         try:
             volatile = rank_volatile_pairs(pairs, top_n=5)
         except Exception as e:
             print(f"  [WATCHLIST volatility rank failed] {e}")
             volatile = []
+
+        # 1) Pinned multi-timezone session announcement
+        send_telegram(fmt_session_announcement(sess), pin=True)
+        # 2) Focus list / watchlist (not pinned, just informational)
         if send_telegram(fmt_watchlist(sess, pairs, volatile)):
             last_session_alerted = sess
             top = ", ".join(n for n, _ in volatile) or "—"

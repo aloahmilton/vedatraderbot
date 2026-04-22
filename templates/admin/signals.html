@@ -1,0 +1,57 @@
+{% extends "admin/base.html" %}
+{% block title %}Signals · Admin{% endblock %}
+{% block admin_content %}
+
+<h1 style="font-family:'Cinzel',serif;letter-spacing:0.18em;color:var(--gold-1);font-size:1.4rem;margin-bottom:6px;">
+    <i class="fa-solid fa-chart-line"></i> Signal Log
+</h1>
+<p style="color:var(--mute);font-size:0.88rem;margin-bottom:22px;">
+    Last 200 signals with delivery status and outcome.
+</p>
+
+<div class="panel">
+    {% if signals %}
+    <table class="dt">
+        <thead><tr>
+            <th>Timestamp (UTC)</th><th>Pair</th><th>Direction</th>
+            <th>Entry</th><th>Exit</th><th>Result</th><th>Δ</th><th>Telegram</th>
+        </tr></thead>
+        <tbody>
+        {% for s in signals %}
+            <tr>
+                <td><code style="color:var(--mute);">{{ s.timestamp.strftime('%Y-%m-%d %H:%M') if s.timestamp else '—' }}</code></td>
+                <td><b>{{ s.pair }}</b></td>
+                <td>
+                    {% if s.direction=='BUY' %}<span style="color:var(--green);">▲ BUY/CALL</span>
+                    {% else %}<span style="color:var(--red);">▼ SELL/PUT</span>{% endif %}
+                </td>
+                <td><code>{{ '%.5f'|format(s.price) if s.price else '—' }}</code></td>
+                <td><code>{{ '%.5f'|format(s.exit_price) if s.exit_price else '—' }}</code></td>
+                <td>
+                    {% if s.result=='WIN' %}<span class="pill win">WIN</span>
+                    {% elif s.result=='LOSS' %}<span class="pill loss">LOSS</span>
+                    {% else %}<span class="pill pending">Pending</span>{% endif %}
+                </td>
+                <td>
+                    {% if s.exit_price and s.price %}
+                        {% set delta = ((s.exit_price - s.price) / s.price * 100) * (1 if s.direction=='BUY' else -1) %}
+                        <code style="color:{% if delta >= 0 %}var(--green){% else %}var(--red){% endif %};">
+                            {{ '%+.2f'|format(delta) }}%
+                        </code>
+                    {% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if s.telegram_ok %}<span class="pill ok">Sent</span>
+                    {% elif s.telegram_ok is sameas false %}<span class="pill fail">Failed</span>
+                    {% else %}<span class="pill dim">?</span>{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="color:var(--mute);">No signals recorded yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

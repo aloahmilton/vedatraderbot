@@ -1,0 +1,41 @@
+{% extends "admin/base.html" %}
+{% block title %}Users · Admin{% endblock %}
+{% block admin_content %}
+
+<h1 style="font-family:'Cinzel',serif;letter-spacing:0.18em;color:var(--gold-1);font-size:1.4rem;margin-bottom:6px;">
+    <i class="fa-solid fa-users"></i> Members
+</h1>
+<p style="color:var(--mute);font-size:0.88rem;margin-bottom:22px;">
+    Last 200 registrations · {{ users|length }} shown.
+</p>
+
+<div class="panel">
+    {% if users %}
+    <table class="dt">
+        <thead><tr>
+            <th>Email</th><th>Joined</th><th>Verified</th><th>Deposit</th><th>Verified On</th>
+        </tr></thead>
+        <tbody>
+        {% for u in users %}
+            <tr>
+                <td><i class="fa-solid fa-envelope" style="color:var(--gold-2);margin-right:6px;"></i>{{ u.email }}</td>
+                <td><code style="color:var(--mute);">{{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '—' }}</code></td>
+                <td>
+                    {% if u.verified %}<span class="pill win"><i class="fa-solid fa-check"></i> Verified</span>
+                    {% else %}<span class="pill dim">Pending</span>{% endif %}
+                </td>
+                <td>
+                    {% if u.deposit_amount %}<code>${{ '%.2f'|format(u.deposit_amount) }}</code>
+                    {% else %}<span style="color:var(--mute);">—</span>{% endif %}
+                </td>
+                <td><code style="color:var(--mute);">{{ u.verified_at.strftime('%Y-%m-%d %H:%M') if u.verified_at else '—' }}</code></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="color:var(--mute);">No registrations yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
