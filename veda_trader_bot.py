@@ -507,11 +507,12 @@ def build_next_queue(exclude_pair: str) -> str:
 #  MESSAGE TEMPLATES
 # ══════════════════════════════════════════
 def fmt_signal(sig: dict, sig_no: int = 0) -> str:
-    is_buy  = sig["type"] == "BUY"
-    color   = "🟩" if is_buy else "🟥"
-    label   = "BUY / CALL" if is_buy else "SELL / PUT"
-    sess    = current_session()
-    sess_lbl = session_label(sess).split(" ", 1)[-1]  # drop the leading emoji
+    is_buy = sig["type"] == "BUY"
+    arrow  = "🟢▲" if is_buy else "🔴▼"
+    label  = "BUY  /  CALL" if is_buy else "SELL  /  PUT"
+    bar    = ("🟩" * 10) if is_buy else ("🟥" * 10)
+    sess   = current_session()
+    sess_lbl = session_label(sess).split(" ", 1)[-1]  # drop leading emoji
 
     now = datetime.now(timezone.utc)
     now_str = now.strftime("%H:%M")
@@ -520,16 +521,35 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     t2 = (base + timedelta(minutes=EXPIRY_MINUTES * 2)).strftime("%H:%M")
     t3 = (base + timedelta(minutes=EXPIRY_MINUTES * 3)).strftime("%H:%M")
 
-    header = f"📡 SIGNAL #{sig_no} · {sess_lbl}" if sig_no else "📡 SIGNAL"
+    # Strength stars from numeric strength (0–5)
+    sc = int(sig.get("strength", 0))
+    stars = "★" * sc + "☆" * (5 - sc)
+
+    rsi = sig.get("rsi", "—")
+    trig = sig.get("trigger", "").upper() or "—"
+    price = sig.get("price")
+    price_str = f"{price:.5f}" if isinstance(price, (int, float)) else "—"
+
+    header_no = f"#{sig_no:02d}" if sig_no else "##"
 
     return (
-        f"{header}\n"
-        f"💰 {EXPIRY_MINUTES}-minute expiration\n"
-        f"{sig['pair']}; {now_str}; {label} {color}\n"
+        f"{bar}\n"
+        f"📡  <b>VEDA SIGNAL  {header_no}</b>   ·   {sess_lbl}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"{arrow}  <b>{sig['pair']}</b>   ·   <b>{label}</b>\n"
         f"\n"
-        f"🕐 TIME TO {t1}\n"
-        f"1st GALE —> TIME TO {t2}\n"
-        f"2nd GALE — TIME TO {t3}"
+        f"💵  Entry price   <code>{price_str}</code>\n"
+        f"⏱  Entry time    <code>{now_str} UTC</code>\n"
+        f"⏳  Expiry         <code>{EXPIRY_MINUTES} min  →  {t1}</code>\n"
+        f"\n"
+        f"🛡  <b>Gale Recovery</b>\n"
+        f"   ┣ 1st gale  →  <code>{t2}</code>\n"
+        f"   ┗ 2nd gale  →  <code>{t3}</code>\n"
+        f"\n"
+        f"📊  Strength   {stars}\n"
+        f"🎯  RSI {rsi}   ·   Trigger {trig}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Trade the plan. Result follows in {EXPIRY_MINUTES + 1} min.</i>"
     )
 
 
