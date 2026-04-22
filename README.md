@@ -22,7 +22,7 @@ Professional real-time trading signal bot for Telegram. Implements the TSS Tri S
 | USD/CAD | Commodity Forex |
 | AUD/USD | Commodity Forex |
 
-## Strategy Rules
+## Strategy Rules   
 Signals trigger ONLY when ALL conditions are met:
 1. EMA 9 crosses EMA 21
 2. RSI 14 between 40-65
