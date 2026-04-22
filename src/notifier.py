@@ -6,9 +6,9 @@ def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) ->
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     target_chat = chat_id if chat_id is not None else CHAT_ID
     payload = {
-        "chat_id": target_chat, 
+        "chat_id": target_chat,
         "text": msg,
-        "parse_mode": "HTML", 
+        "parse_mode": "HTML",
         "disable_web_page_preview": True
     }
     if "reply_markup" in kwargs:
@@ -30,6 +30,27 @@ def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) ->
         return True
     except Exception as e:
         print(f"  [Telegram Error] {e}")
+        return False
+
+def send_voice(voice_file_path: str, caption: str = None, chat_id: str = None) -> bool:
+    """Send voice message to Telegram. voice_file_path should be path to .ogg or .mp3 file."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVoice"
+    target_chat = chat_id if chat_id is not None else CHAT_ID
+    try:
+        with open(voice_file_path, 'rb') as voice_file:
+            files = {'voice': voice_file}
+            data = {'chat_id': target_chat}
+            if caption:
+                data['caption'] = caption
+                data['parse_mode'] = 'HTML'
+            r = requests.post(url, data=data, files=files, timeout=30)
+            res = r.json()
+            if not res.get("ok"):
+                print(f"  [Voice FAIL] {res.get('description')}")
+                return False
+            return True
+    except Exception as e:
+        print(f"  [Voice Error] {e}")
         return False
 
 def score_bar(score: int) -> str:
@@ -291,6 +312,32 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
             )
             send_telegram_func(status_msg, chat_id=chat_id, reply_markup=markup)
 
+        elif text == "/pairs":
+            from .config import ALL_PAIRS
+            pairs_list = [f"• <b>{p['name']}</b> ({p['category'].title()})" for p in ALL_PAIRS]
+            pairs_msg = (
+                f"📋 <b>MONITORED PAIRS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n" + "\n".join(pairs_list) +
+                f"\n\n<b>Total: {len(ALL_PAIRS)} pairs</b>"
+            )
+            send_telegram_func(pairs_msg, chat_id=chat_id)
+
+        elif text == "/sessions":
+            sessions_msg = (
+                f"🕐 <b>TRADING SESSIONS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"🌏 <b>Asian Session:</b> 00:00 - 09:00 UTC\n"
+                f"🇬🇧 <b>London Session:</b> 07:00 - 16:00 UTC\n"
+                f"🔥 <b>London/NY Overlap:</b> 12:00 - 16:00 UTC\n"
+                f"🇺🇸 <b>New York Session:</b> 16:00 - 21:00 UTC\n"
+                f"\n"
+                f"💡 <b>Current:</b> {session_label(current_session())}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+            send_telegram_func(sessions_msg, chat_id=chat_id)
+
         elif text.startswith("/addgold "):
             # Simple admin check - you can add your user ID here
             # if user_id == "YOUR_ADMIN_ID":
@@ -305,10 +352,13 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
         print(f"[COMMAND HANDLER] {e}")
 
 def setup_bot_profile():
-    # Simple setup call
+    # Update bot commands and description
     commands = [
-        {"command": "start", "description": "Get bot info"},
-        {"command": "status", "description": "Check bot status"},
+        {"command": "start", "description": "Get bot info and welcome message"},
+        {"command": "status", "description": "Check bot health and current session"},
+        {"command": "pairs", "description": "List all monitored currency pairs"},
+        {"command": "sessions", "description": "View the trading session schedule"},
     ]
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     requests.post(url, json={"commands": commands})
+    print("[BOT] Commands updated on Telegram")

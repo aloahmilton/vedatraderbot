@@ -8,8 +8,8 @@ from src.config import (
 )
 from src.engine import analyze_pair, evaluate_pending_signals
 from src.notifier import (
-    send_telegram, fmt_signal, fmt_gold_signal, fmt_session_announcement, 
-    fmt_watchlist, fmt_session_report, handle_telegram_command
+    send_telegram, fmt_signal, fmt_gold_signal, fmt_session_announcement,
+    fmt_watchlist, fmt_session_report, handle_telegram_command, setup_bot_profile
 )
 from src.database import save_signal_to_db, record_signal_state
 
@@ -104,7 +104,8 @@ def poll_commands():
 def main():
     print("Veda Trader Bot v5 Online & Scanning...")
     send_telegram("🚀 <b>VEDA TRADER v5 ONLINE</b>\nModular structure active.")
-    
+    setup_bot_profile()  # Update bot commands on Telegram
+
     scan_markets()
     schedule.every(5).minutes.do(scan_markets)
     
