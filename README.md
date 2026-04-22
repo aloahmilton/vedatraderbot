@@ -1,163 +1,66 @@
 # Veda Trader Bot v5
 ## TSS Tri Session Sentinel Trading Bot
 
-Professional real-time trading signal bot for Telegram with FREE and GOLD premium tiers.
+Professional real-time trading signal bot for Telegram with a clean, modular architecture.
 
 ## ✨ Features
 
-### FREE Tier (Everyone)
-✅ 18 currency pairs across 3 sessions
-✅ Real-time 5-minute market scanning
-✅ Pre-signal alerts 1 minute before crossover
-✅ Session reports with win/loss stats
-✅ Automatic result tracking
-✅ 60-minute session pre-alerts
-✅ UTC timezone clearly marked
-
-### 👑 GOLD Tier (Premium)
-✅ Ultra-strict filters (85%+ win rate)
-✅ Only 2-3 highest quality signals per day
-✅ Private premium channel delivery
-✅ First access before free signals
-✅ Premium command support
-
-## 📊 Active Pairs (18 Total)
-
-| Major Forex | London | New York | Asian |
-|---|---|---|---|
-| EUR/USD | EUR/GBP | EUR/CAD | AUD/JPY |
-| GBP/USD | EUR/JPY | GBP/CAD | NZD/JPY |
-| USD/JPY | GBP/JPY | CAD/JPY | AUD/NZD |
-| USD/CAD | EUR/CHF |  |  |
-| AUD/USD | GBP/CHF |  |  |
-| NZD/USD |  |  |  |
-| USD/CHF |  |  |  |
-
-## 🔧 Strategy Rules
-
-### FREE Signals
-Signals trigger when ALL conditions are met:
-1. EMA 9 crosses EMA 21 (bull/bear)
-2. RSI 14 between 25-70 (widened range)
-3. Volume 0.5x above 20-period average
-4. 5-layer filter stack (time + volatility + trend + momentum + entry)
-
-### 👑 GOLD Signals (Premium)
-Ultra-strict filters for maximum accuracy:
-1. All FREE conditions PLUS:
-2. ADX > 28 (strong trend only)
-3. MACD histogram > 0.00003 (strong momentum)
-4. Bollinger position 35% (middle of range)
-5. Quality score > 85/100
-6. ATR > 18 BPS (high volatility pairs only)
-
-**Result:** 2-3 signals/day with 85%+ win rate
+- ✅ **Modular Architecture**: Clean code separated into `config`, `engine`, `indicators`, `notifier`, and `database`.
+- ✅ **Premium UI**: Professional Telegram message formatting with grid-style watchlists and polished reports.
+- ✅ **5-Layer Filter Stack**: Time + Volatility + Trend + Momentum + Entry filters for high-accuracy signals.
+- ✅ **Session Intelligence**: Automated Watchlists and Reports for London, New York, and Asian sessions.
+- ✅ **Automatic Outcome Tracking**: Real-time WIN/LOSS evaluation and gain/loss percentage reporting.
 
 ## 🚀 Installation & Setup
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Setup bot profile (run once)
-python config_and_commands_vedatraderbot.py
-```
-
-## ⚙️ Configuration
-
-### Basic Setup
-Edit these values at top of `veda_trader_bot.py`:
-```python
-TELEGRAM_TOKEN = "your_bot_token_here"
-CHAT_ID        = "your_public_channel_id_here"
-```
-
-### Premium Setup (Optional)
-Edit `premium.py`:
-```python
-GOLD_CHAT_ID = "your_private_premium_channel_id_here"
-```
-
-### User Management
-Add gold subscribers in `premium.py`:
-```python
-add_gold_user("123456789", days=30, name="John Doe")
+# 2. Configure environment
+# Edit .env or src/config.py with your TELEGRAM_TOKEN and MONGO_URI
 ```
 
 ## 🎯 Usage
 
 ```bash
-# Clean startup (recommended)
-python run_clean.py
+# Start the Signal Bot
+python main.py
 
-# Or direct startup
-python veda_trader_bot.py
+# Start the Web Dashboard
+python app.py
 ```
 
 ### Telegram Commands
-- `/start` - Get bot info
-- `/status` - Check bot status
-- `/pairs` - List monitored pairs
-- `/sessions` - Session schedule
-- `/stats` - Today's stats
-- `/gold` - Gold membership status (premium only)
+- `/start` - Bot info and welcome message
+- `/status` - Check bot health and current session
+- `/pairs` - List all monitored currency pairs
+- `/sessions` - View the trading session schedule
 
-## 📨 Telegram Delivery
+## 📂 File Structure
 
-- **FREE Channel**: Public channel for all users
-- **GOLD Channel**: Private premium channel
-- **Session Alerts**: 60 minutes before each session
-- **Results**: End-of-session performance reports
-
-## 🌐 Hosting & Architecture
-
-### Recommended Platforms
-- **Railway** - Excellent for Python bots
-- **Render** - Free tier available
-- **Replit** - Good for development
-- **VPS** - Full control (DigitalOcean, Linode)
-
-### File Structure
-```
-veda_trader_bot.py           # Main bot logic
-premium.py                   # Gold tier system
-config_and_commands_vedatraderbot.py  # Bot setup & commands
-mydocuments/TSS.pine        # TradingView Pine Script
-requirements.txt            # Python dependencies
+```text
+veda/
+├── main.py             # Main Signal Bot entry point
+├── app.py              # Web Dashboard (Flask)
+├── Procfile            # Deployment config
+├── src/
+│   ├── config.py       # Strategy params, pairs, and sessions
+│   ├── engine.py       # Signal filtering and analysis brain
+│   ├── indicators.py   # Pure math for EMA, RSI, ADX, etc.
+│   ├── notifier.py     # Telegram formatting and command handling
+│   └── database.py     # MongoDB integration and state management
+├── webapp/             # Dashboard HTML templates
+└── old_versions/       # Archived legacy files (backup)
 ```
 
-### Data Sources
-- **Yahoo Finance** - Live Forex data
-- **Telegram Bot API** - Message delivery
-- **Local JSON** - User subscriptions
-
-## 🔒 Security & Privacy
-
-- No user data stored (except premium subscriptions)
-- All trading signals public (GOLD = private channel)
-- Secure Telegram token handling
-- Optional premium system (fully removable)
-
-## 📈 Performance Expectations
-
-### FREE Tier
-- 5-15 signals per day
-- ~60-70% win rate
-- All 18 pairs monitored
-
-### GOLD Tier
-- 2-3 signals per day
-- ~85%+ win rate
-- Ultra-strict filters
-
-## ✅ Complete Setup Checklist
-
-- [x] Install dependencies: `pip install -r requirements.txt`
-- [x] Configure Telegram tokens in `veda_trader_bot.py`
-- [x] Set GOLD_CHAT_ID in `premium.py` (optional)
-- [x] Run bot profile setup: `python config_and_commands_vedatraderbot.py`
-- [x] Start bot: `python veda_trader_bot.py`
-- [x] Add premium users: Use `/addgold user_id days` in private chat
+## 🛠 Strategy Logic
+The bot uses a **5-Layer Filter Stack** to ensure only high-probability trades are sent:
+1. **Time Filter**: Avoids dead liquidity hours.
+2. **Volatility Filter**: Checks ATR and Bollinger Band squeeze status.
+3. **Trend Filter**: Aligns 5M signals with the 15M higher timeframe trend.
+4. **Momentum Filter**: Confirms direction with ADX, MACD, and RSI crossovers.
+5. **Entry Filter**: Verifies candle body size and proximity to Support/Resistance.
 
 ---
 

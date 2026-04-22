@@ -56,7 +56,7 @@ except ImportError:
 try:
     from config_and_commands_vedatraderbot import handle_telegram_command
     COMMANDS_ENABLED = True
-    print("✅ Command system loaded")
+    print("Command system loaded")
 except ImportError as e:
     COMMANDS_ENABLED = False
     print(f"⚠️ Command system not loaded: {e}")

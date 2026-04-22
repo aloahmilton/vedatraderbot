@@ -8,16 +8,21 @@ import secrets
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
+from src.database import get_db, init_db
+from src.config import SECRET_KEY, MONGO_URI
+
 load_dotenv()
 
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
+app = Flask(__name__, template_folder='webapp')
+app.secret_key = SECRET_KEY
 
-MONGO_URI = os.getenv('MONGO_URI')
-client = MongoClient(MONGO_URI)
-db = client['vedatrader']
-users_collection   = db['users']
-signals_collection = db['signals']
+db = get_db()
+if db is None:
+    print("CRITICAL: Could not connect to MongoDB")
+    # Fallback to local init if get_db fails (optional)
+    
+users_collection   = db['users'] if db is not None else None
+signals_collection = db['signals'] if db is not None else None
 
 AFFILIATE_LINK = os.getenv('AFFILIATE_LINK')
 

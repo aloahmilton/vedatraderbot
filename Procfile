@@ -1,1 +1,1 @@
-worker: python veda_trader_bot.py
+worker: python main.py
