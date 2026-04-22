@@ -338,6 +338,18 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
             )
             send_telegram_func(sessions_msg, chat_id=chat_id)
 
+        elif text == "/premium":
+            markup = {
+                "inline_keyboard": [
+                    [{"text": "📊 Stocks", "callback_data": "cat_stocks"}, {"text": "₿ Crypto", "callback_data": "cat_crypto"}],
+                    [{"text": "🏛 Indices", "callback_data": "cat_indices"}, {"text": "🥇 Gold Assets", "callback_data": "cat_commodities"}],
+                    [{"text": "🏆 Elite Gold Signals", "callback_data": "cat_gold"}],
+                    [{"text": "⬅️ Back", "callback_data": "back_to_start"}]
+                ]
+            }
+            msg = "💎 <b>PREMIUM HUB</b>\n\nSelect a category to view the latest high-accuracy signals:"
+            send_telegram_func(msg, chat_id=chat_id, reply_markup=markup)
+
         elif text.startswith("/addgold "):
             # Simple admin check - you can add your user ID here
             # if user_id == "YOUR_ADMIN_ID":
@@ -358,6 +370,7 @@ def setup_bot_profile():
         {"command": "status", "description": "Check bot health and current session"},
         {"command": "pairs", "description": "List all monitored currency pairs"},
         {"command": "sessions", "description": "View the trading session schedule"},
+        {"command": "premium", "description": "Access premium features and signals"},
     ]
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     requests.post(url, json={"commands": commands})
