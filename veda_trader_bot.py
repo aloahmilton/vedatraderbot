@@ -136,6 +136,8 @@ last_session_alerted: str  = ""
 pair_status:          dict = {}   # name -> {"candles_away": int, "direction": str}
 session_signals:      list = []   # track all signals in current session
 current_session_date: str  = ""  # track date for report header
+session_signal_no:    int  = 0    # signal counter, resets each session
+active_session_name:  str  = ""   # last session we counted under
 
 # ══════════════════════════════════════════
 #  TELEGRAM
@@ -236,20 +238,93 @@ def is_dupe(pair: str, direction: str) -> bool:
     if not last: return False
     return (datetime.now(timezone.utc) - last).total_seconds() / 60 < DEDUPE_MIN
 
-def record_sig(pair: str, direction: str, price: float):
-    last_signal_time[f"{pair}:{direction}"] = datetime.now(timezone.utc)
-    # Record signal for session report
+def record_sig(pair: str, direction: str, price: float) -> int:
+    """Record signal in session log + bump per-session counter. Returns the signal number."""
+    global current_session_date, session_signal_no, active_session_name
     now = datetime.now(timezone.utc)
+    sess = current_session()
+
+    # Reset counter on session change
+    if sess != active_session_name:
+        session_signal_no = 0
+        active_session_name = sess
+
+    last_signal_time[f"{pair}:{direction}"] = now
+    session_signal_no += 1
+
     session_signals.append({
+        "no": session_signal_no,
         "pair": pair,
         "time": now.strftime("%H:%M"),
         "direction": direction,
         "price": price,
-        "timestamp": now
+        "timestamp": now,
+        "result": None,        # "WIN" / "LOSS" set by evaluator after expiry
+        "exit_price": None,
     })
-    # Update current session date
-    global current_session_date
     current_session_date = now.strftime("%d/%B").upper()
+    return session_signal_no
+
+
+def evaluate_pending_signals():
+    """Re-check any signals past their 2-min expiry and stamp WIN/LOSS honestly."""
+    now = datetime.now(timezone.utc)
+    sigs_col = _signals_col()
+    for s in session_signals:
+        if s.get("result") is not None:
+            continue
+        age_min = (now - s["timestamp"]).total_seconds() / 60
+        if age_min < EXPIRY_MINUTES:
+            continue  # still in flight
+
+        # Find the original pair info to fetch price
+        info = next((p for p in ALL_PAIRS if p["name"] == s["pair"]), None)
+        if not info: continue
+        df = fetch_ohlcv(info["ticker"])
+        if df is None or len(df) < 2: continue
+        exit_price = float(df["close"].iloc[-1])
+        entry = float(s["price"])
+
+        if s["direction"] == "BUY":
+            won = exit_price > entry
+        else:
+            won = exit_price < entry
+        s["result"] = "WIN" if won else "LOSS"
+        s["exit_price"] = exit_price
+
+        # Persist outcome to DB if available
+        if sigs_col is not None:
+            try:
+                sigs_col.update_one(
+                    {"pair": s["pair"], "timestamp": s["timestamp"]},
+                    {"$set": {"result": s["result"], "exit_price": exit_price}},
+                )
+            except Exception as e:
+                print(f"  [DB outcome write] {e}")
+        print(f"  [OUTCOME] #{s['no']} {s['pair']} {s['direction']} → {s['result']} "
+              f"(entry {entry:.5f} → exit {exit_price:.5f})")
+
+
+def calc_atr(df: pd.DataFrame, n: int = 14) -> float:
+    """Average True Range — used to rank pair volatility for the watchlist."""
+    h, l, c = df["high"], df["low"], df["close"]
+    tr = pd.concat([(h - l), (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
+    atr = tr.rolling(n).mean().iloc[-1]
+    last = c.iloc[-1]
+    return float(atr / last * 10000) if last else 0.0  # ATR in basis points
+
+def rank_volatile_pairs(pairs: list[dict], top_n: int = 5) -> list[tuple]:
+    """Return top N pairs by current ATR (high → low)."""
+    scored = []
+    for p in pairs:
+        try:
+            df = fetch_ohlcv(p["ticker"])
+            if df is None or len(df) < 20: continue
+            scored.append((p["name"], calc_atr(df)))
+        except Exception:
+            continue
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[:top_n]
 
 
 def is_session_ending() -> bool:
@@ -394,20 +469,25 @@ def build_next_queue(exclude_pair: str) -> str:
 # ══════════════════════════════════════════
 #  MESSAGE TEMPLATES
 # ══════════════════════════════════════════
-def fmt_signal(sig: dict) -> str:
+def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     is_buy  = sig["type"] == "BUY"
     color   = "🟩" if is_buy else "🟥"
-    label   = "CALL" if is_buy else "PUT"
+    label   = "BUY / CALL" if is_buy else "SELL / PUT"
+    sess    = current_session()
+    sess_lbl = session_label(sess).split(" ", 1)[-1]  # drop the leading emoji
+
     now = datetime.now(timezone.utc)
     now_str = now.strftime("%H:%M")
-
     base = now.replace(second=0, microsecond=0)
     t1 = (base + timedelta(minutes=EXPIRY_MINUTES)).strftime("%H:%M")
     t2 = (base + timedelta(minutes=EXPIRY_MINUTES * 2)).strftime("%H:%M")
     t3 = (base + timedelta(minutes=EXPIRY_MINUTES * 3)).strftime("%H:%M")
 
+    header = f"📡 SIGNAL #{sig_no} · {sess_lbl}" if sig_no else "📡 SIGNAL"
+
     return (
-        f"💰{EXPIRY_MINUTES}-minute expiration\n"
+        f"{header}\n"
+        f"💰 {EXPIRY_MINUTES}-minute expiration\n"
         f"{sig['pair']}; {now_str}; {label} {color}\n"
         f"\n"
         f"🕐 TIME TO {t1}\n"
@@ -416,7 +496,7 @@ def fmt_signal(sig: dict) -> str:
     )
 
 
-def fmt_watchlist(sess: str, pairs: list[dict]) -> str:
+def fmt_watchlist(sess: str, pairs: list[dict], volatile: list[tuple] | None = None) -> str:
     now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
     tips = {
         "asian":   "JPY, AUD and NZD crosses most active. Expect tight, steady moves.",
@@ -428,18 +508,29 @@ def fmt_watchlist(sess: str, pairs: list[dict]) -> str:
         f"  {'🟢' if i % 2 == 0 else '🔵'} {p['name']}"
         for i, p in enumerate(pairs)
     )
+
+    vol_block = ""
+    if volatile:
+        v_lines = "\n".join(
+            f"  🔥 <b>{name}</b> — ATR {atr:.1f} bps"
+            for name, atr in volatile
+        )
+        vol_block = (
+            f"\n<b>🎯 Top movers this session (focus list):</b>\n{v_lines}\n"
+        )
+
     return (
         f"📋 <b>VEDA TRADER — SESSION WATCHLIST</b>\n"
         f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
         f"\n"
         f"{session_label(sess)} has opened.\n"
-        f"\n"
-        f"<b>Pairs being scanned this session:</b>\n"
+        f"{vol_block}\n"
+        f"<b>All pairs scanned this session:</b>\n"
         f"{lines}\n"
         f"\n"
         f"💡 {tips.get(sess, '')}\n"
         f"\n"
-        f"🔔 Signals fire when all 3 conditions align.\n"
+        f"🔔 Signals fire when EMA + MACD + RSI align.\n"
         f"🕐 {now_str}"
     )
 
@@ -472,25 +563,39 @@ def fmt_approaching(alerts: list[tuple]) -> str:
 
 
 def fmt_session_report() -> str:
-    """Format end-of-session operations report matching sample style"""
+    """End-of-session report with REAL win/loss outcomes (evaluator-driven)."""
     if not session_signals:
         return f"📊 Operations Report ({current_session_date})\n\n\nNo signals recorded this session.\n"
-    
-    # Build signal lines - for now mark all as GAIN until we add result tracking
+
+    # Make sure every signal has been evaluated before we report
+    evaluate_pending_signals()
+
     lines = []
+    wins = losses = pending = 0
     for sig in session_signals:
-        dir_label = "CALL" if sig["direction"] == "BUY" else "PUT"
-        # For now all marked as GAIN - will add win/loss tracking later
-        lines.append(f"{sig['pair']};{sig['time']};{dir_label}->GAIN ✅")
-    
-    wins = len(session_signals)
-    losses = 0  # TODO: Add actual win/loss tracking
-    
+        dir_label = "BUY/CALL" if sig["direction"] == "BUY" else "SELL/PUT"
+        no = sig.get("no", "?")
+        result = sig.get("result")
+        if result == "WIN":
+            tag = "GAIN ✅"; wins += 1
+        elif result == "LOSS":
+            tag = "LOSS ❌"; losses += 1
+        else:
+            tag = "PENDING ⏳"; pending += 1
+        lines.append(f"#{no}  {sig['pair']}; {sig['time']}; {dir_label} → {tag}")
+
+    total = wins + losses
+    wr = f"{(wins / total * 100):.0f}%" if total else "—"
+
     report = (
-        f"📊 Operations Report ({current_session_date})\n\n\n"
-        f"{chr(10).join(lines)}\n\n\n"
-        f"{wins}WINS ✅\n"
-        f"{losses} LOSS ❌\n"
+        f"📊 <b>VEDA TRADER — Operations Report</b>\n"
+        f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
+        f"<b>{current_session_date}</b>\n\n"
+        f"{chr(10).join(lines)}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ {wins} WIN     ❌ {losses} LOSS"
+        + (f"     ⏳ {pending} PENDING" if pending else "") +
+        f"\n🎯 Win rate: <b>{wr}</b>\n"
     )
     return report
 
@@ -536,9 +641,16 @@ def maybe_send_watchlist():
     sess = current_session()
     if sess != last_session_alerted:
         pairs = pairs_for_session(sess)
-        if send_telegram(fmt_watchlist(sess, pairs)):
+        # Rank top movers by ATR for the focus list
+        try:
+            volatile = rank_volatile_pairs(pairs, top_n=5)
+        except Exception as e:
+            print(f"  [WATCHLIST volatility rank failed] {e}")
+            volatile = []
+        if send_telegram(fmt_watchlist(sess, pairs, volatile)):
             last_session_alerted = sess
-            print(f"  [WATCHLIST] {sess} — {len(pairs)} pairs")
+            top = ", ".join(n for n, _ in volatile) or "—"
+            print(f"  [WATCHLIST] {sess} — {len(pairs)} pairs · top movers: {top}")
 
 
 last_pre_session_alerted: str = ""
@@ -626,6 +738,12 @@ def scan_markets():
     pairs   = pairs_for_session(sess)
     print(f"\n[{now_str}] {sess.upper()} | {len(pairs)} pairs")
 
+    # Evaluate any signals whose 2-min expiry has passed → real WIN/LOSS
+    try:
+        evaluate_pending_signals()
+    except Exception as e:
+        print(f"  [evaluator error] {e}")
+
     maybe_send_watchlist()
     maybe_send_pre_session_alert()
 
@@ -643,11 +761,12 @@ def scan_markets():
             continue
 
         if sig:
-            ok = send_telegram(fmt_signal(sig))
-            record_sig(name, sig["type"], sig["price"])
+            sig_no = record_sig(name, sig["type"], sig["price"])
+            ok = send_telegram(fmt_signal(sig, sig_no))
             _record_signal_db(sig, ok)
             arrow = "▲" if sig["type"] == "BUY" else "▼"
-            print(f"  [{arrow} {sig['type']} {'✓' if ok else '✗'}] {name}  RSI={sig['rsi']}  Vol={sig['vol']}x")
+            print(f"  [#{sig_no} {arrow} {sig['type']} {'✓' if ok else '✗'}] {name}  "
+                  f"RSI={sig['rsi']}  trig={sig.get('trigger','?')}")
             signals_found += 1
             time.sleep(1)
         else:
