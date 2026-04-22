@@ -455,10 +455,8 @@ def evaluate_pending_signals():
             f"⚡ <b>✨ TRADE RESULT #{s['no']} ✨</b> ⚡\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"\n"
-            f"{bar}\n"
             f"<b>{label}</b>  ·  {s['pair']}\n"
-            f"<code>{entry:.5f} → {exit_price:.5f}  ({sign}{pct:.2f}%)</code>\n"
-            f"{bar}"
+            f"<code>{entry:.5f} → {exit_price:.5f}  ({sign}{pct:.2f}%)</code>"
         )
         send_telegram(result_msg)
         print(f"  [OUTCOME] #{s['no']} {s['pair']} {s['direction']} → {s['result']}")
@@ -922,7 +920,6 @@ def send_startup():
 
 def main():
     """Main bot function for clean startup"""
-    global last_update_id
     last_update_id = 0
 
     send_startup()
