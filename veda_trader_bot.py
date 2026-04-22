@@ -80,7 +80,7 @@ STOP_PERCENT  = 0.3
 DEDUPE_MIN    = 10
 
 # Expiration window for binary-style scalping signals
-EXPIRY_MINUTES = 2
+EXPIRY_MINUTES = 5
 
 # ══════════════════════════════════════════
 #  18-PAIR UNIVERSE
@@ -328,7 +328,7 @@ def evaluate_pending_signals():
 def fmt_outcome_bar(s: dict) -> str:
     """Short colored bar for trade result."""
     win   = s["result"] == "WIN"
-    bar   = ("🟩" * 14) if win else ("🟥" * 14)
+    bar   = ("🟩" * 4) if win else ("🟥" * 4)
     label = "GAIN ✅" if win else "LOSS ❌"
     direc = "BUY/CALL" if s["direction"] == "BUY" else "SELL/PUT"
     entry, exit_p = s["price"], s["exit_price"]
@@ -510,7 +510,7 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     is_buy = sig["type"] == "BUY"
     arrow  = "🟢▲" if is_buy else "🔴▼"
     label  = "BUY  /  CALL" if is_buy else "SELL  /  PUT"
-    bar    = ("🟩" * 10) if is_buy else ("🟥" * 10)
+    bar    = ("🟩" * 4) if is_buy else ("🟥" * 4)
     sess   = current_session()
     sess_lbl = session_label(sess).split(" ", 1)[-1]  # drop leading emoji
 
