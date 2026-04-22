@@ -376,6 +376,15 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
             msg = "💎 <b>PREMIUM HUB</b>\n\nSelect a category to view the latest high-accuracy signals:"
             send_telegram_func(msg, chat_id=chat_id, reply_markup=markup)
 
+        elif text == "/test":
+            # Send test message to channel
+            test_msg = "🧪 <b>TEST MESSAGE</b>\n\nBot is working! Sent at " + datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+            success = send_telegram_func(test_msg)
+            if success:
+                send_telegram_func("✅ Test message sent to channel!", chat_id=chat_id)
+            else:
+                send_telegram_func("❌ Failed to send test message. Check CHAT_ID and bot permissions.", chat_id=chat_id)
+
         elif text.startswith("/addgold "):
             # Simple admin check - you can add your user ID here
             # if user_id == "YOUR_ADMIN_ID":
@@ -397,6 +406,7 @@ def setup_bot_profile():
         {"command": "pairs", "description": "List all monitored currency pairs"},
         {"command": "sessions", "description": "View the trading session schedule"},
         {"command": "premium", "description": "Access premium features and signals"},
+        {"command": "test", "description": "Send test message to channel"},
     ]
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     requests.post(url, json={"commands": commands})
