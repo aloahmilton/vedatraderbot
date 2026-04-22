@@ -335,6 +335,9 @@ def fmt_outcome_bar(s: dict) -> str:
     pct = (exit_p - entry) / entry * 100 * (1 if s["direction"] == "BUY" else -1)
     sign = "+" if pct >= 0 else ""
     return (
+        f"⚡ <b>✨ TRADE RESULT ✨</b> ⚡\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
         f"{bar}\n"
         f"<b>{label}</b>  ·  #{s['no']}  ·  {s['pair']}  {direc}\n"
         f"<code>{entry:.5f} → {exit_p:.5f}  ({sign}{pct:.2f}%)</code>\n"
