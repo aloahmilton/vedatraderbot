@@ -533,6 +533,9 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     header_no = f"#{sig_no:02d}" if sig_no else "##"
 
     return (
+        f"✨ <b>NEW TRADES</b> ✨\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
         f"{bar}\n"
         f"📡  <b>VEDA SIGNAL  {header_no}</b>   ·   {sess_lbl}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
@@ -692,8 +695,8 @@ def fmt_session_report() -> str:
     wr = f"{(wins / total * 100):.0f}%" if total else "—"
 
     report = (
-        f"📊 <b>VEDA TRADER — Operations Report</b>\n"
-        f"┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
+        f"📊 <b>✨ RESULTS ✨</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>{current_session_date}</b>\n\n"
         f"{chr(10).join(lines)}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -715,13 +718,15 @@ def fmt_session_alert(session_name: str, utc_hour: int) -> str:
     utc_time = f"{utc_hour:02d}:00"
     
     return (
-        f"‼️ SET YOUR ALARMS ‼️\n"
+        f"⚡ <b>‼️ SET YOUR ALARMS ‼️</b> ⚡\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
         f"THE \"{session_names.get(session_name, session_name).upper()}\" WILL START IN 60 MINUTES\n"
         f"\n"
         f"STARTS AT {utc_time} (UTC)\n"
         f"\n"
         f"🇬🇧 UK – Starts at {utc_hour + 1:02d}:00\n"
+        f"🇨🇲 Cameroon – Starts at {utc_hour + 1:02d}:00\n"
         f"🇿🇦 South Africa – Starts at {utc_hour + 2:02d}:00\n"
         f"🇪🇸 Spain – Starts at {utc_hour + 1:02d}:00\n"
         f"🇧🇷 Brazil – Starts at {utc_hour - 3:02d}:00\n"
