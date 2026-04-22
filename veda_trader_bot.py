@@ -296,7 +296,9 @@ def analyze(pair_info: dict) -> dict | None:
 
     avg_vol   = volumes.iloc[-21:-1].mean()
     vol_ratio = (volumes.iloc[-1] / avg_vol) if avg_vol > 0 else 0
-    good_vol  = vol_ratio >= VOL_MIN
+    # Yahoo Finance reports 0 volume for forex (decentralised market).
+    # Treat missing volume as "pass" instead of permanently blocking signals.
+    good_vol  = (avg_vol == 0) or (vol_ratio >= VOL_MIN)
 
     bull_x     = (f1 <= s1) and (f0 > s0)
     bear_x     = (f1 >= s1) and (f0 < s0)
@@ -319,14 +321,26 @@ def analyze(pair_info: dict) -> dict | None:
     }
 
     # ── PRIMARY TRIGGER: confirmed EMA crossover on the most recent candle ──
-    # bull_x / bear_x means a real cross just printed → tradable on next candle.
     confirmed_buy  = bull_x and macd_bull and good_vol and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX
     confirmed_sell = bear_x and macd_bear and good_vol and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX
 
-    # ── SECONDARY TRIGGER: 1 candle pre-cross (early entry) ──
-    pre_signal = candles_away == 1 and converging and good_vol
+    # ── SECONDARY TRIGGER: 1–2 candles pre-cross (early entry) ──
+    pre_signal = candles_away <= 2 and converging and good_vol
 
-    if confirmed_buy or (pre_signal and f0 < s0 and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and macd_bull):
+    # ── TERTIARY TRIGGER: momentum continuation ──
+    # EMAs already stacked the right way + MACD agreeing + price pushing fresh.
+    # Catches trends so we don't only trade reversals.
+    last3_high = df["high"].iloc[-4:-1].max()
+    last3_low  = df["low"].iloc[-4:-1].min()
+    fresh_high = closes.iloc[-1] > last3_high
+    fresh_low  = closes.iloc[-1] < last3_low
+
+    momentum_buy  = (f0 > s0) and macd_bull and good_vol and fresh_high and \
+                    RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and (f0 - s0) > (f1 - s1)
+    momentum_sell = (f0 < s0) and macd_bear and good_vol and fresh_low and \
+                    RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and (s0 - f0) > (s1 - f1)
+
+    if confirmed_buy or momentum_buy or (pre_signal and f0 < s0 and RSI_BUY_MIN <= rsi_now <= RSI_BUY_MAX and macd_bull):
         if is_dupe(name, "BUY"): return None
         sl = round(price * (1 - STOP_PERCENT / 100), 6)
         tp = round(price * (1 + STOP_PERCENT / 100 * RISK_REWARD), 6)
@@ -335,10 +349,10 @@ def analyze(pair_info: dict) -> dict | None:
             "sl": sl, "tp": tp, "rsi": round(rsi_now, 1),
             "vol": round(vol_ratio, 2),
             "strength": calc_strength(gap_pct, rsi_now, vol_ratio),
-            "trigger": "CROSS" if confirmed_buy else "PRE",
+            "trigger": "CROSS" if confirmed_buy else ("MOMO" if momentum_buy else "PRE"),
         }
 
-    if confirmed_sell or (pre_signal and f0 > s0 and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and macd_bear):
+    if confirmed_sell or momentum_sell or (pre_signal and f0 > s0 and RSI_SEL_MIN <= rsi_now <= RSI_SEL_MAX and macd_bear):
         if is_dupe(name, "SELL"): return None
         sl = round(price * (1 + STOP_PERCENT / 100), 6)
         tp = round(price * (1 - STOP_PERCENT / 100 * RISK_REWARD), 6)
@@ -347,7 +361,7 @@ def analyze(pair_info: dict) -> dict | None:
             "sl": sl, "tp": tp, "rsi": round(rsi_now, 1),
             "vol": round(vol_ratio, 2),
             "strength": calc_strength(gap_pct, rsi_now, vol_ratio),
-            "trigger": "CROSS" if confirmed_sell else "PRE",
+            "trigger": "CROSS" if confirmed_sell else ("MOMO" if momentum_sell else "PRE"),
         }
 
     return None
