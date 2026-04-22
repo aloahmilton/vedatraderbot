@@ -56,8 +56,10 @@ except ImportError:
 try:
     from config_and_commands_vedatraderbot import handle_telegram_command
     COMMANDS_ENABLED = True
-except ImportError:
+    print("✅ Command system loaded")
+except ImportError as e:
     COMMANDS_ENABLED = False
+    print(f"⚠️ Command system not loaded: {e}")
 from dotenv import load_dotenv
 
 try:
@@ -918,12 +920,10 @@ def send_startup():
 # Command handlers moved to config_and_commands_vedatraderbot.py
 
 
-if __name__ == "__main__":
-    print("=" * 54)
-    print("     VEDA TRADER — Signal Bot v4")
-    print("     18 Pairs | 3 Sessions | EMA+MACD+RSI+Vol")
-    print("     ✨ PREMIUM SYSTEM READY ✨" if PREMIUM_ENABLED else "")
-    print("=" * 54)
+def main():
+    """Main bot function for clean startup"""
+    global last_update_id
+    last_update_id = 0
 
     send_startup()
     scan_markets()
@@ -938,20 +938,35 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
 
-        # Poll for commands every 10 seconds
+        # Poll for commands (quiet operation)
         if COMMANDS_ENABLED:
             try:
                 url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-                params = {"offset": last_update_id + 1, "timeout": 5}
-                response = requests.get(url, params=params, timeout=10)
+                params = {"offset": last_update_id + 1, "timeout": 1}  # Reduced timeout
+                response = requests.get(url, params=params, timeout=5)
 
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("ok") and data.get("result"):
                         for update in data["result"]:
                             last_update_id = max(last_update_id, update["update_id"])
-                            handle_telegram_command(update, send_telegram, PREMIUM_ENABLED)
+                            try:
+                                handle_telegram_command(update, send_telegram, PREMIUM_ENABLED)
+                            except Exception as cmd_e:
+                                print(f"[COMMAND ERROR] {cmd_e}")
+            except requests.exceptions.RequestException:
+                pass  # Network issues - ignore silently
             except Exception as e:
-                print(f"[COMMAND POLL] {e}")
+                print(f"[COMMAND POLL ERROR] {e}")
 
         time.sleep(30)
+
+
+if __name__ == "__main__":
+    # Suppress Windows path warnings
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+    import os
+    os.environ['PYTHONWARNINGS'] = 'ignore'
+
+    main()

@@ -87,7 +87,10 @@ add_gold_user("123456789", days=30, name="John Doe")
 ## 🎯 Usage
 
 ```bash
-# Start the bot
+# Clean startup (recommended)
+python run_clean.py
+
+# Or direct startup
 python veda_trader_bot.py
 ```
 

@@ -50,13 +50,14 @@ High accuracy forex signal bot with automatic Gale management, session reports a
 
     # 4. Commands menu
     print("\n✓ Setting commands...")
-    res = telegram_api("setMyCommands", commands=[
-        {"command": "start", "description": "Start the bot"},
+    commands = [
+        {"command": "start", "description": "Get bot info and status"},
         {"command": "status", "description": "Check bot status"},
         {"command": "pairs", "description": "List monitored pairs"},
         {"command": "sessions", "description": "Show session schedule"},
-        {"command": "stats", "description": "Show today's stats"}
-    ])
+        {"command": "gold", "description": "Check GOLD membership status"}
+    ]
+    res = telegram_api("setMyCommands", commands=commands)
     print(f"  {res.get('ok', False)}: {res.get('description', '')}")
 
     print("\n✅ Bot profile configured successfully!")
@@ -71,11 +72,100 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
         text = message.get("text", "")
 
         # User commands
-        if text == "/gold" and PREMIUM_ENABLED:
-            from premium import fmt_gold_status
-            send_telegram_func(fmt_gold_status(user_id), chat_id=chat_id)
+        if text == "/start":
+            welcome_msg = (
+                f"🎯 <b>VEDA TRADER BOT v5</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"✅ <b>Active & Scanning Markets</b>\n"
+                f"\n"
+                f"📊 Monitoring 18 currency pairs\n"
+                f"⏰ Signals every 5 minutes\n"
+                f"🌍 3 trading sessions\n"
+                f"\n"
+                f"👑 <b>GOLD Premium Available</b>\n"
+                f"   • 85%+ win rate signals\n"
+                f"   • 2-3 elite signals/day\n"
+                f"   • Private channel delivery\n"
+                f"\n"
+                f"Use /gold to check premium status"
+            )
+            send_telegram_func(welcome_msg, chat_id=chat_id)
 
-        elif text.startswith("/stats") and PREMIUM_ENABLED:
+        elif text == "/status":
+            current_sess = "unknown"
+            try:
+                from datetime import datetime, timezone
+                h = datetime.now(timezone.utc).hour
+                if 12 <= h < 16: current_sess = "London/NY Overlap"
+                elif 7 <= h < 16: current_sess = "London Session"
+                elif 16 <= h < 21: current_sess = "New York Session"
+                else: current_sess = "Asian Session"
+            except:
+                pass
+
+            status_msg = (
+                f"📊 <b>BOT STATUS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"✅ <b>ONLINE & ACTIVE</b>\n"
+                f"\n"
+                f"🌍 Current Session: {current_sess}\n"
+                f"📈 Scanning: 18 pairs\n"
+                f"⏰ Next scan: ~{30} seconds\n"
+                f"👑 Premium: {'Enabled' if PREMIUM_ENABLED else 'Disabled'}\n"
+            )
+            send_telegram_func(status_msg, chat_id=chat_id)
+
+        elif text == "/pairs":
+            pairs_msg = (
+                f"📊 <b>MONITORED PAIRS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"<b>🇪🇺 Major Forex (All Sessions):</b>\n"
+                f"EUR/USD, GBP/USD, USD/JPY, USD/CAD\n"
+                f"AUD/USD, NZD/USD, USD/CHF\n"
+                f"\n"
+                f"<b>🇬🇧 London Session:</b>\n"
+                f"EUR/GBP, EUR/JPY, GBP/JPY\n"
+                f"EUR/CHF, GBP/CHF\n"
+                f"\n"
+                f"<b>🇺🇸 New York Session:</b>\n"
+                f"EUR/CAD, GBP/CAD, CAD/JPY\n"
+                f"\n"
+                f"<b>🌏 Asian Session:</b>\n"
+                f"AUD/JPY, NZD/JPY, AUD/NZD\n"
+            )
+            send_telegram_func(pairs_msg, chat_id=chat_id)
+
+        elif text == "/sessions":
+            sessions_msg = (
+                f"⏰ <b>TRADING SESSIONS (UTC)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n"
+                f"🌏 <b>Asian Session</b>\n"
+                f"   Start: 00:00 UTC\n"
+                f"   Duration: 7 hours\n"
+                f"   Pairs: AUD/JPY, NZD/JPY, AUD/NZD\n"
+                f"\n"
+                f"🇬🇧 <b>London Session</b>\n"
+                f"   Start: 07:00 UTC\n"
+                f"   Duration: 4 hours\n"
+                f"   Pairs: EUR/GBP, EUR/JPY, GBP/JPY, etc.\n"
+                f"\n"
+                f"🔥 <b>London/NY Overlap</b>\n"
+                f"   Start: 12:00 UTC\n"
+                f"   Duration: 4 hours\n"
+                f"   Pairs: All pairs (best signals)\n"
+                f"\n"
+                f"🇺🇸 <b>New York Session</b>\n"
+                f"   Start: 16:00 UTC\n"
+                f"   Duration: 5 hours\n"
+                f"   Pairs: USD pairs, EUR/CAD, GBP/CAD\n"
+            )
+            send_telegram_func(sessions_msg, chat_id=chat_id)
+
+        elif text == "/gold" and PREMIUM_ENABLED:
             from premium import get_gold_stats
             active, expiring = get_gold_stats()
             stats_msg = (
