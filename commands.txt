@@ -1,6 +1,0 @@
-start - Get bot info and welcome message
-status - Check bot health and current session
-pairs - List all monitored currency pairs
-sessions - View the trading session schedule
-premium - Access premium features and signals
-test - Send test message to channel

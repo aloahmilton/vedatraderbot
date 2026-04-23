@@ -61,7 +61,7 @@ def get_trend_direction(ticker: str) -> str:
     ef = calc_ema(df["close"], EMA_FAST)
     es = calc_ema(df["close"], EMA_SLOW)
     f0, s0 = ef.iloc[-1], es.iloc[-1]
-    if abs(f0 - s0) / s0 < 0.0003: return "NEUTRAL"
+    if abs(f0 - s0) / s0 < 0.0001: return "NEUTRAL"
     return "UP" if f0 > s0 else "DOWN"
 
 def get_major_trend(ticker: str) -> str:
@@ -123,12 +123,12 @@ def analyze_pair(pair_info: dict) -> dict | None:
     if trend == "NEUTRAL": return None
 
     ema_spread = abs(f0 - s0) / price if price else 0
-    ema_rising = f0 > f1 > f_prev
-    ema_falling = f0 < f1 < f_prev
+    ema_rising = f0 > f1
+    ema_falling = f0 < f1
 
     # Allow continuation trends with healthy separation, not only fresh crosses.
-    bull_cross = ((f_prev <= s_prev) and (f1 > s1) and (f0 > s0)) or (f0 > s0 and ema_rising and ema_spread >= EMA_SPREAD_MIN)
-    bear_cross = ((f_prev >= s_prev) and (f1 < s1) and (f0 < s0)) or (f0 < s0 and ema_falling and ema_spread >= EMA_SPREAD_MIN)
+    bull_cross = ((f_prev <= s_prev) and (f1 > s1) and (f0 > s0)) or (f0 > s0 and ema_rising)
+    bear_cross = ((f_prev >= s_prev) and (f1 < s1) and (f0 < s0)) or (f0 < s0 and ema_falling)
 
     if adx_now < ADX_MIN: return None
     
@@ -149,10 +149,11 @@ def analyze_pair(pair_info: dict) -> dict | None:
     direction = "BUY" if buy_sig else "SELL"
     
     # ── VOLUME CONFIRMATION (New) ──
-    v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
     v_now = df["volume"].iloc[-1]
-    if v_now < v_ema * VOLUME_CONFIRM_MULTIPLIER:
-        return None
+    if v_now > 0:
+        v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
+        if v_now < v_ema * VOLUME_CONFIRM_MULTIPLIER:
+            return None
 
     # ── MAJOR TREND CONFIRMATION (New) ──
     major_trend = get_major_trend(ticker)

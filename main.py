@@ -9,7 +9,7 @@ from src.config import (
 from src.engine import analyze_pair, evaluate_pending_signals
 from src.notifier import (
     send_telegram, fmt_signal, fmt_gold_signal, fmt_session_announcement,
-    fmt_watchlist, fmt_session_report, handle_telegram_command, setup_bot_profile
+    fmt_watchlist, fmt_premium_watchlist, fmt_session_report, handle_telegram_command, setup_bot_profile
 )
 from src.database import save_signal_to_db, record_signal_state
 from src.database import upsert_bot_status, log_scan_error
@@ -44,7 +44,7 @@ def _deliver_signal(sig: dict) -> bool:
             return delivered
         else:
             # Regular premium signals
-            delivered = send_telegram(fmt_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
+            delivered = send_telegram(fmt_premium_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
             print("  [PREMIUM] Sent premium signal to private channel." if delivered else "  [PREMIUM] Failed to send premium signal.")
             return delivered
 
@@ -75,9 +75,21 @@ def scan_markets():
     
     # 2. Session Announcements
     if sess != last_session_alerted:
-        send_telegram(fmt_session_announcement(sess), pin=True)
+        msg_ann = fmt_session_announcement(sess)
         pairs = pairs_for_session(sess)
-        send_telegram(fmt_watchlist(sess, pairs))
+        msg_watch = fmt_watchlist(sess, pairs)
+        
+        # Send to Free Channel
+        send_telegram(msg_ann, pin=True)
+        send_telegram(msg_watch)
+        
+        # Send to Premium Channel if active
+        if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
+            send_telegram(msg_ann, pin=True, chat_id=PREMIUM_CHANNEL_ID)
+            msg_premium_watch = fmt_premium_watchlist(sess, pairs)
+            if msg_premium_watch:
+                send_telegram(msg_premium_watch, chat_id=PREMIUM_CHANNEL_ID)
+            
         last_session_alerted = sess
         
     # 3. Scan Pairs
@@ -112,12 +124,17 @@ def scan_markets():
             else:
                 print(f"  [PREMIUM LOGGED] {sig['pair']} {sig['type']} saved to DB (Score: {sig['score']}).")
         time.sleep(0.5)
+    
+    print(f"[{now.strftime('%H:%M:%S')}] Scan complete. Generated {generated} signals.")
 
     # 4. Session Report
     h, m = now.hour, now.minute
     if (h, m) in [(6, 55), (15, 55), (20, 55)]:
         date_str = now.strftime("%d %b").upper()
-        send_telegram(fmt_session_report(session_signals, date_str))
+        report = fmt_session_report(session_signals, date_str)
+        send_telegram(report)
+        if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
+            send_telegram(report, chat_id=PREMIUM_CHANNEL_ID)
         session_signals = []
 
     upsert_bot_status({
@@ -134,7 +151,7 @@ def poll_commands():
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
         params = {"offset": last_update_id + 1, "timeout": 8, "allowed_updates": ["message", "callback_query"]}
-        r = requests.get(url, params=params, timeout=5)
+        r = requests.get(url, params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
             if data.get("ok") and data.get("result"):
