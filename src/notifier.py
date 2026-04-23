@@ -86,8 +86,11 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     header_no = f"#{sig_no:02d}" if sig_no else "##"
 
     return (
-        f"📡 <b>VEDA TRADER v5</b>   ·   {sess_lbl}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"✨ <b>NEW SIGNAL</b> ✨\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"📡  <b>VEDA TRADER  {header_no}</b>   ·   {sess_lbl}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
         f"{icon}  <b>{sig['pair']}</b>\n"
         f"🕹  Action: {arrow}\n"
         f"\n"
@@ -102,65 +105,36 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
         f"📊  <b>Signal Quality:</b>  {tier}\n"
         f"   <code>{q_bar}</code>\n"
         f"\n"
+        f"📈  RSI <code>{sig['rsi']}</code>  ·  ADX <code>{sig['adx']}</code>  ·  ATR <code>{sig['atr_bps']} bps</code>\n"
         f"🧭  15M Trend: <b>{sig['trend']}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Result posted in {EXPIRY_MINUTES + 1} min. Trade responsibly.</i>\n\n"
         f"ⓘ <b>Trade Stocks, Indices & Crypto?</b>\n"
         f"👉 <b>Click /start to upgrade to GOLD</b>"
     )
 
-def fmt_premium_signal(sig: dict, sig_no: int = 0):
-    """Branded formatting for premium signals."""
-    is_buy = sig["type"] == "BUY"
-    icon = "💎"
-    arrow = "🚀 <b>BUY / CALL</b>" if is_buy else "📉 <b>SELL / PUT</b>"
-    
-    now = datetime.now(timezone.utc)
-    now_str = now.strftime("%H:%M")
-    base = now.replace(second=0, microsecond=0)
-    t1 = (base + timedelta(minutes=EXPIRY_MINUTES)).strftime("%H:%M")
-    t2 = (base + timedelta(minutes=EXPIRY_MINUTES * 2)).strftime("%H:%M")
-    
-    return (
-        f"💎 <b>VEDA TRADER — PREMIUM</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 <b>{sig['pair']}</b> — {arrow}\n"
-        f"\n"
-        f"💵  Price: <code>{sig['price']:.5f}</code>\n"
-        f"⏱  Time:  <code>{now_str} UTC</code>\n"
-        f"⏳  Exp:   <code>{EXPIRY_MINUTES}m → {t1}</code>\n"
-        f"🛡  Gale:  <code>{t2}</code>\n"
-        f"\n"
-        f"📊  Score: <b>{sig['score']}/100</b>\n"
-        f"🧭  Trend: <b>{sig['trend']}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"👑 <i>Elite algorithmic execution</i>"
-    )
-
 def fmt_gold_signal(sig: dict, sig_no: int = 0):
-    """Ultra-premium branding for gold signals."""
+    """Premium formatting for gold signals."""
     is_buy = sig["type"] == "BUY"
+    icon = "👑"
     arrow = "🚀 <b>BUY / CALL</b>" if is_buy else "📉 <b>SELL / PUT</b>"
     
-    now = datetime.now(timezone.utc)
-    now_str = now.strftime("%H:%M")
-    base = now.replace(second=0, microsecond=0)
-    t1 = (base + timedelta(minutes=EXPIRY_MINUTES)).strftime("%H:%M")
+    # Gold signals are high accuracy setups
+    base_msg = fmt_signal(sig, sig_no)
     
     return (
-        f"👑 <b>VEDA TRADER — GOLD</b> 👑\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⭐ <b>HIGH ACCURACY SETUP</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 <b>{sig['pair']}</b> — {arrow}\n"
+        f"👑 <b>VEDA TRADER — GOLD SIGNAL</b> 👑\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💎 <b>PREMIUM SELECTION</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"💵  Entry: <code>{sig['price']:.5f}</code>\n"
-        f"⏱  Time:  <code>{now_str} UTC</code>\n"
-        f"⏳  Exp:   <code>{EXPIRY_MINUTES}m → {t1}</code>\n"
+        f"🎯 {sig['pair']} — {arrow}\n"
+        f"📊 Accuracy Score: <b>{sig['score']}/100</b>\n"
         f"\n"
-        f"📊  Accuracy: <b>{sig['score']}/100</b>\n"
-        f"🧭  1H Trend: <b>CONFIRMED</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"✨ <i>This is an elite tier signal.</i>"
+        f"🛡 <i>This signal met all 'Best of the Best' filters including 1H trend and Volume confirmation.</i>\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✨ {base_msg}"
     )
 
 def fmt_session_announcement(sess: str) -> str:
@@ -463,36 +437,6 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
 
     except Exception as e:
         print(f"[COMMAND HANDLER] {e}")
-
-def fmt_premium_watchlist(sess: str, pairs: list) -> str:
-    """Watchlist formatted specifically for premium members."""
-    # Filter only premium pairs for this list
-    premium_pairs = [p for p in pairs if p.get("tier") == "premium"]
-    if not premium_pairs:
-        return ""
-    
-    rows = []
-    for i in range(0, len(premium_pairs), 2):
-        pair_row = premium_pairs[i:i+2]
-        row_str = "  ·  ".join([f"<b>{p['name']}</b>" for p in pair_row])
-        rows.append(f"  💎 {row_str}")
-        
-    pair_grid = "\n".join(rows)
-    sess_name = session_label(sess).upper()
-
-    return (
-        f"👑 <b>VEDA TRADER — PREMIUM WATCHLIST</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🌍 <b>{sess_name}</b>\n"
-        f"\n"
-        f"📡 <b>MONITORING {len(premium_pairs)} ELITE ASSETS:</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"{pair_grid}\n"
-        f"\n"
-        f"🚀 <i>Scanning for high-accuracy institutional setups.</i>\n"
-        f"⚠️ <b>v5 filters:</b> ATR + ADX + 1H Trend Confirmation\n"
-        f"━━━━━━━━━━━━━━━━━━━━"
-    )
 
 def setup_bot_profile():
     # Update bot commands and description

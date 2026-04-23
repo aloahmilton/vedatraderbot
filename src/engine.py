@@ -1,4 +1,3 @@
-import yfinance as yf
 import pandas as pd
 from datetime import datetime, timezone
 from .config import (
@@ -9,6 +8,8 @@ from .config import (
     VOLUME_CONFIRM_MULTIPLIER, RSI_MIDPOINT_BUY, RSI_MIDPOINT_SELL,
     SR_LOOKBACK, SR_PROXIMITY, RISK_REWARD, STOP_PERCENT, EXPIRY_MINUTES
 )
+# BUG FIX: replaced direct yfinance calls with the multi-source fetcher
+from .fetcher import fetch_ohlcv
 from .indicators import (
     calc_ema, calc_rsi, calc_macd, calc_adx, calc_atr, 
     calc_bollinger, find_sr_levels, too_close_to_sr, calc_vol_ema
@@ -32,7 +33,10 @@ def evaluate_pending_signals(session_signals):
         age_min = (now - s["timestamp"]).total_seconds() / 60
         if age_min < EXPIRY_MINUTES: continue
 
-        df = fetch_ohlcv(s["ticker"] if "ticker" in s else s["pair"]) # Ensure ticker is used
+        # BUG FIX: always use the stored ticker (e.g. "EURUSD=X"), never the
+        # display name ("EUR/USD") which yfinance / Stooq don't understand.
+        ticker = s.get("ticker") or s.get("pair", "")
+        df = fetch_ohlcv(ticker)
         if df is None or len(df) < 2: continue
 
         exit_price = float(df["close"].iloc[-1])
@@ -45,15 +49,7 @@ def evaluate_pending_signals(session_signals):
         update_signal_result(s["pair"], s["timestamp"], s["result"], exit_price)
         print(f"  [OUTCOME] #{s['no']} {s['pair']} → {s['result']}")
 
-def fetch_ohlcv(ticker: str, interval: str = TF_SIGNAL, days: int = LOOKBACK) -> pd.DataFrame | None:
-    try:
-        df = yf.Ticker(ticker).history(period=f"{days}d", interval=interval)
-        if df is None or len(df) < 60: return None
-        df = df.rename(columns={"Open":"open","High":"high","Low":"low","Close":"close","Volume":"volume"})
-        return df[["open","high","low","close","volume"]].dropna().copy()
-    except Exception as e:
-        print(f"  [Fetch {ticker}/{interval}] {e}")
-        return None
+# fetch_ohlcv is imported from .fetcher (multi-source: yfinance + Stooq fallback)
 
 def get_trend_direction(ticker: str) -> str:
     df = fetch_ohlcv(ticker, interval=TF_TREND, days=LOOKBACK)
@@ -61,12 +57,12 @@ def get_trend_direction(ticker: str) -> str:
     ef = calc_ema(df["close"], EMA_FAST)
     es = calc_ema(df["close"], EMA_SLOW)
     f0, s0 = ef.iloc[-1], es.iloc[-1]
-    if abs(f0 - s0) / s0 < 0.0001: return "NEUTRAL"
+    if abs(f0 - s0) / s0 < 0.0003: return "NEUTRAL"
     return "UP" if f0 > s0 else "DOWN"
 
 def get_major_trend(ticker: str) -> str:
     """Check 1H trend using 200 EMA."""
-    df = fetch_ohlcv(ticker, interval=TF_MAJOR, days=5) # More days for 200 EMA
+    df = fetch_ohlcv(ticker, interval=TF_MAJOR, days=7)  # More days for 200 EMA
     if df is None or len(df) < EMA_MAJOR_PERIOD: return "NEUTRAL"
     ema_major = calc_ema(df["close"], EMA_MAJOR_PERIOD)
     price = df["close"].iloc[-1]
@@ -123,12 +119,12 @@ def analyze_pair(pair_info: dict) -> dict | None:
     if trend == "NEUTRAL": return None
 
     ema_spread = abs(f0 - s0) / price if price else 0
-    ema_rising = f0 > f1
-    ema_falling = f0 < f1
+    ema_rising = f0 > f1 > f_prev
+    ema_falling = f0 < f1 < f_prev
 
     # Allow continuation trends with healthy separation, not only fresh crosses.
-    bull_cross = ((f_prev <= s_prev) and (f1 > s1) and (f0 > s0)) or (f0 > s0 and ema_rising)
-    bear_cross = ((f_prev >= s_prev) and (f1 < s1) and (f0 < s0)) or (f0 < s0 and ema_falling)
+    bull_cross = ((f_prev <= s_prev) and (f1 > s1) and (f0 > s0)) or (f0 > s0 and ema_rising and ema_spread >= EMA_SPREAD_MIN)
+    bear_cross = ((f_prev >= s_prev) and (f1 < s1) and (f0 < s0)) or (f0 < s0 and ema_falling and ema_spread >= EMA_SPREAD_MIN)
 
     if adx_now < ADX_MIN: return None
     
@@ -149,11 +145,10 @@ def analyze_pair(pair_info: dict) -> dict | None:
     direction = "BUY" if buy_sig else "SELL"
     
     # ── VOLUME CONFIRMATION (New) ──
+    v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
     v_now = df["volume"].iloc[-1]
-    if v_now > 0:
-        v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
-        if v_now < v_ema * VOLUME_CONFIRM_MULTIPLIER:
-            return None
+    if v_now < v_ema * VOLUME_CONFIRM_MULTIPLIER:
+        return None
 
     # ── MAJOR TREND CONFIRMATION (New) ──
     major_trend = get_major_trend(ticker)
