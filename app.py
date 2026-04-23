@@ -181,6 +181,11 @@ def broker_signup():
 @app.route('/telegram-auth', methods=['POST'])
 def telegram_auth():
     try:
+        # Check database availability first
+        db_err = require_db()
+        if db_err:
+            return jsonify({'status': 'error', 'message': 'Database unavailable'}), 503
+
         data = request.get_json()
         if not data:
             return jsonify({'status': 'error', 'message': 'No data received'}), 400

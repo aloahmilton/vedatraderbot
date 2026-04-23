@@ -39,13 +39,17 @@ def _deliver_signal(sig: dict) -> bool:
     if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
         if sig.get("is_gold"):
             # Gold signals get special formatting
-            send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
-            print("  [GOLD] Sent premium gold signal to private channel.")
+            delivered = send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
+            print("  [GOLD] Sent premium gold signal to private channel." if delivered else "  [GOLD] Failed to send premium gold signal.")
+            return delivered
         else:
             # Regular premium signals
-            send_telegram(fmt_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
-            print("  [PREMIUM] Sent premium signal to private channel.")
-    return True
+            delivered = send_telegram(fmt_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
+            print("  [PREMIUM] Sent premium signal to private channel." if delivered else "  [PREMIUM] Failed to send premium signal.")
+            return delivered
+
+    # No premium channel configured or disabled
+    return False
 
 def _store_signal(sig: dict, delivered: bool):
     sig["telegram_ok"] = bool(delivered) if sig["tier"] == "public" else None
