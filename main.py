@@ -17,6 +17,13 @@ from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, flash, session as flask_session)
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
+from keep_alive import keep_alive
+# ... your other imports
+
+keep_alive()
+# ... your main code (e.g., bot.run())
+
+
 
 from src.config import (
     pairs_for_session, current_session, session_label,
@@ -411,6 +418,10 @@ def main():
         schedule.run_pending()
         poll_commands()
         time.sleep(2)
+
+
+    
+    
 
 if __name__ == "__main__":
     main()
