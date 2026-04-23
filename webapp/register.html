@@ -35,6 +35,19 @@
 .link a:hover { color: var(--gold-2); }
 .brand-mini { text-align: center; margin-bottom: 24px; }
 .fineprint { color: var(--mute); font-size: 0.78rem; text-align: center; margin-top: 14px; line-height: 1.6; }
+.telegram-login { text-align: center; margin: 20px 0; }
+.telegram-login .telegram-btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #0088cc;
+    color: white;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background .2s;
+}
+.telegram-login .telegram-btn:hover { background: #006699; }
+.divider { text-align: center; margin: 20px 0; color: var(--mute); font-size: 0.9rem; }
 {% endblock %}
 
 {% block content %}
@@ -57,6 +70,10 @@
             </div>
             <button type="submit" class="btn btn-gold btn-full">Register</button>
         </form>
+        <div class="divider">or</div>
+        <div class="telegram-login">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login="vedatraderbot" data-size="large" data-request-access="write" data-onauth="onTelegramAuth(user)"></script>
+        </div>
         <div class="fineprint">Free signal access activates after a verified $10 broker deposit.</div>
         <div class="gold-line" style="margin: 22px 0 14px;"></div>
         <div class="link">Already a member? <a href="/login">Login here</a></div>

@@ -43,6 +43,30 @@ def save_signal_to_db(sig_data):
         except Exception as e:
             print(f"[DB Error] Save failed: {e}")
 
+def upsert_bot_status(status: dict):
+    db = get_db()
+    if db is not None:
+        try:
+            db["bot_status"].update_one(
+                {"_id": "latest"},
+                {"$set": status},
+                upsert=True,
+            )
+        except Exception as e:
+            print(f"[DB Error] Status upsert failed: {e}")
+
+def log_scan_error(source: str, message: str):
+    db = get_db()
+    if db is not None:
+        try:
+            db["scan_errors"].insert_one({
+                "source": source,
+                "message": str(message),
+                "timestamp": datetime.now(timezone.utc),
+            })
+        except Exception as e:
+            print(f"[DB Error] Scan error logging failed: {e}")
+
 def update_signal_result(pair, timestamp, result, exit_price):
     db = get_db()
     if db is not None:

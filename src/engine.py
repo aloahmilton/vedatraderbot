@@ -5,7 +5,8 @@ from .config import (
     TF_SIGNAL, TF_TREND, TF_MAJOR, LOOKBACK, EMA_FAST, EMA_SLOW, EMA_MAJOR_PERIOD,
     RSI_BUY_MIN, RSI_BUY_MAX, RSI_SELL_MIN, RSI_SELL_MAX,
     ADX_MIN, ATR_MIN_BPS, BB_SQUEEZE_THRESHOLD, MIN_BODY_ATR_RATIO,
-    VOL_EMA_PERIOD, GOLD_SCORE_THRESHOLD,
+    VOL_EMA_PERIOD, GOLD_SCORE_THRESHOLD, SIGNAL_MIN_SCORE, EMA_SPREAD_MIN,
+    VOLUME_CONFIRM_MULTIPLIER, RSI_MIDPOINT_BUY, RSI_MIDPOINT_SELL,
     SR_LOOKBACK, SR_PROXIMITY, RISK_REWARD, STOP_PERCENT, EXPIRY_MINUTES
 )
 from .indicators import (
@@ -77,7 +78,7 @@ def get_major_trend(ticker: str) -> str:
 def quality_score(rsi, adx, atr_bps, bb_width, macd_hist, trend_aligned, body_ratio, direction) -> int:
     score = 0
     # RSI (25)
-    rsi_center = 52 if direction == "BUY" else 48
+    rsi_center = RSI_MIDPOINT_BUY if direction == "BUY" else RSI_MIDPOINT_SELL
     score += max(0, 25 - int(abs(rsi - rsi_center) * 1.5))
     # ADX (20)
     score += min(20, int((adx - ADX_MIN) * 0.8)) if adx >= ADX_MIN else 0
@@ -93,6 +94,8 @@ def quality_score(rsi, adx, atr_bps, bb_width, macd_hist, trend_aligned, body_ra
 
 def analyze_pair(pair_info: dict) -> dict | None:
     name, ticker = pair_info["name"], pair_info["ticker"]
+    tier = pair_info.get("tier", "public")
+    category = pair_info.get("category", "forex")
     df = fetch_ohlcv(ticker)
     if df is None or len(df) < 80: return None
 
@@ -119,8 +122,13 @@ def analyze_pair(pair_info: dict) -> dict | None:
     trend = get_trend_direction(ticker)
     if trend == "NEUTRAL": return None
 
-    bull_cross = (f_prev <= s_prev) and (f1 > s1) and (f0 > s0)
-    bear_cross = (f_prev >= s_prev) and (f1 < s1) and (f0 < s0)
+    ema_spread = abs(f0 - s0) / price if price else 0
+    ema_rising = f0 > f1 > f_prev
+    ema_falling = f0 < f1 < f_prev
+
+    # Allow continuation trends with healthy separation, not only fresh crosses.
+    bull_cross = ((f_prev <= s_prev) and (f1 > s1) and (f0 > s0)) or (f0 > s0 and ema_rising and ema_spread >= EMA_SPREAD_MIN)
+    bear_cross = ((f_prev >= s_prev) and (f1 < s1) and (f0 < s0)) or (f0 < s0 and ema_falling and ema_spread >= EMA_SPREAD_MIN)
 
     if adx_now < ADX_MIN: return None
     
@@ -143,7 +151,7 @@ def analyze_pair(pair_info: dict) -> dict | None:
     # ── VOLUME CONFIRMATION (New) ──
     v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
     v_now = df["volume"].iloc[-1]
-    if v_now < v_ema * 1.1: # 10% higher than average volume
+    if v_now < v_ema * VOLUME_CONFIRM_MULTIPLIER:
         return None
 
     # ── MAJOR TREND CONFIRMATION (New) ──
@@ -154,7 +162,8 @@ def analyze_pair(pair_info: dict) -> dict | None:
     if is_dupe(name, direction): return None
 
     score = quality_score(rsi_now, adx_now, atr_bps, bb_width, hist_now, True, body_ratio, direction)
-    if score < 55: return None
+    if score < SIGNAL_MIN_SCORE:
+        return None
 
     sl = round(price * (1 - STOP_PERCENT/100 if direction == "BUY" else 1 + STOP_PERCENT/100), 6)
     tp = round(price * (1 + STOP_PERCENT/100*RISK_REWARD if direction == "BUY" else 1 - STOP_PERCENT/100*RISK_REWARD), 6)
@@ -168,6 +177,7 @@ def analyze_pair(pair_info: dict) -> dict | None:
     signal = {
         "type": direction, "pair": name, "price": price, "sl": sl, "tp": tp,
         "rsi": round(rsi_now, 1), "adx": round(adx_now, 1), "atr_bps": round(atr_bps, 1),
-        "score": score, "trend": trend, "is_gold": is_gold
+        "score": score, "trend": trend, "is_gold": is_gold,
+        "ticker": ticker, "tier": tier, "category": category
     }
     return signal

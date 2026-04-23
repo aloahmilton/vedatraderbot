@@ -1,6 +1,7 @@
 import requests
+import os
 from datetime import datetime, timezone, timedelta
-from .config import TELEGRAM_TOKEN, CHAT_ID, EXPIRY_MINUTES, current_session, session_label, ALL_PAIRS
+from .config import TELEGRAM_TOKEN, CHAT_ID, PUBLIC_CHANNEL_URL, EXPIRY_MINUTES, current_session, session_label, ALL_PAIRS
 
 def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) -> bool:
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -15,6 +16,9 @@ def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) ->
         payload["reply_markup"] = kwargs["reply_markup"]
     try:
         r = requests.post(url, json=payload, timeout=15)
+        if r.status_code != 200:
+            print(f"  [Telegram FAIL] HTTP {r.status_code}: {r.text[:200]}")
+            return False
         res = r.json()
         if not res.get("ok"):
             print(f"  [Telegram FAIL] {res.get('description')}")
@@ -234,16 +238,22 @@ def answer_callback_query(callback_query_id: str, text: str = None):
     payload = {"callback_query_id": callback_query_id}
     if text:
         payload["text"] = text
-    requests.post(url, json=payload)
+    try:
+        requests.post(url, json=payload, timeout=10)
+    except Exception:
+        pass
 
 def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: bool):
     try:
+        admin_ids = {x.strip() for x in os.getenv("ADMIN_USER_IDS", "").split(",") if x.strip()}
+
         # Handle Callback Queries (Button Clicks)
         if "callback_query" in update:
             cb = update["callback_query"]
             callback_id = cb["id"]
-            chat_id = str(cb["message"]["chat"]["id"])
-            user_id = str(cb["from"]["id"])
+            msg_ctx = cb.get("message", {})
+            chat_id = str(msg_ctx.get("chat", {}).get("id") or cb.get("from", {}).get("id", ""))
+            user_id = str(cb.get("from", {}).get("id", ""))
             data = cb["data"]
             
             if data == "view_premium":
@@ -274,7 +284,16 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                             msg += f"\n✨ <b>{s['pair']}</b> ({s['type']})\nScore: <b>{s['score']}/100</b>\nPrice: <code>{s['price']:.5f}</code>\n"
                         send_telegram_func(msg, chat_id=chat_id)
                 else:
-                    msg = "🚫 <b>ACCESS DENIED</b>\n\nThis category is reserved for <b>GOLD Members</b>.\n\nClick /start to see subscription options."
+                    from .database import get_recent_premium_signals
+                    sigs = get_recent_premium_signals(category=category, limit=2)
+                    cat_name = category.upper()
+                    if sigs:
+                        msg = f"🔒 <b>{cat_name} GOLD PREVIEW</b>\n━━━━━━━━━━━━━━━━━━━━\n"
+                        for s in sigs:
+                            msg += f"\n• <b>{s['pair']}</b> ({s['type']}) — Score <b>{s['score']}/100</b>"
+                        msg += "\n\n👑 Full access requires GOLD membership.\nUse /start and tap <b>Membership Info</b>."
+                    else:
+                        msg = f"🔒 <b>{cat_name} ACCESS</b>\n\nNo preview signals right now.\nThis category is reserved for <b>GOLD Members</b>."
                     send_telegram_func(msg, chat_id=chat_id)
                 answer_callback_query(callback_id)
             
@@ -304,11 +323,13 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
         user_id = str(message.get("from", {}).get("id"))
         username = message.get("from", {}).get("username", "Unknown")
         text = message.get("text", "")
+        if not chat_id:
+            return
 
         if text == "/start":
             markup = {
                 "inline_keyboard": [
-                    [{"text": "📊 Free Signals Channel", "url": f"https://t.me/{CHAT_ID.replace('-100','')}" if CHAT_ID.startswith('-100') else "https://t.me/VedaTrader"}],
+                    [{"text": "📊 Free Signals Channel", "url": PUBLIC_CHANNEL_URL}],
                     [{"text": "💎 View Premium Assets", "callback_data": "view_premium"}],
                     [{"text": "👑 Membership Info", "callback_data": "gold_info"}]
                 ]
@@ -375,6 +396,20 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
             }
             msg = "💎 <b>PREMIUM HUB</b>\n\nSelect a category to view the latest high-accuracy signals:"
             send_telegram_func(msg, chat_id=chat_id, reply_markup=markup)
+        elif text == "/help":
+            send_telegram_func(
+                "🧭 <b>AVAILABLE COMMANDS</b>\n\n"
+                "/start - Open main menu\n"
+                "/status - Bot status\n"
+                "/pairs - Tracked assets\n"
+                "/sessions - Trading sessions\n"
+                "/premium - Premium hub\n"
+                "/test - Send channel test\n"
+                "/myid - Show your Telegram ID",
+                chat_id=chat_id
+            )
+        elif text == "/myid":
+            send_telegram_func(f"🆔 Your user ID: <code>{user_id}</code>", chat_id=chat_id)
 
         elif text == "/test":
             # Send test message to channel
@@ -386,14 +421,19 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                 send_telegram_func("❌ Failed to send test message. Check CHAT_ID and bot permissions.", chat_id=chat_id)
 
         elif text.startswith("/addgold "):
-            # Simple admin check - you can add your user ID here
-            # if user_id == "YOUR_ADMIN_ID":
+            if admin_ids and user_id not in admin_ids:
+                send_telegram_func("🚫 You are not allowed to use /addgold.", chat_id=chat_id)
+                return
             parts = text.split()
             if len(parts) >= 3:
                 target_id, days = parts[1], parts[2]
                 from .premium import add_gold_user
                 if add_gold_user(target_id, days, username):
                     send_telegram_func(f"✅ User {target_id} updated to GOLD for {days} days.", chat_id=chat_id)
+                else:
+                    send_telegram_func("❌ Could not update GOLD membership.", chat_id=chat_id)
+            else:
+                send_telegram_func("Usage: /addgold <user_id> <days>", chat_id=chat_id)
 
     except Exception as e:
         print(f"[COMMAND HANDLER] {e}")
@@ -407,6 +447,8 @@ def setup_bot_profile():
         {"command": "sessions", "description": "View the trading session schedule"},
         {"command": "premium", "description": "Access premium features and signals"},
         {"command": "test", "description": "Send test message to channel"},
+        {"command": "help", "description": "Show available commands"},
+        {"command": "myid", "description": "Show your Telegram user ID"},
     ]
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMyCommands"
     requests.post(url, json={"commands": commands})

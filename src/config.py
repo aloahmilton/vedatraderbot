@@ -8,7 +8,8 @@ load_dotenv()
 #  CREDENTIALS
 # ══════════════════════════════════════════
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TOKEN_HERE")
-CHAT_ID        = os.getenv("TELEGRAM_CHANNEL_ID", "YOUR_CHAT_ID_HERE")
+CHAT_ID        = os.getenv("FREE_TELEGRAM_CHANNEL_ID", "YOUR_CHAT_ID_HERE")
+PUBLIC_CHANNEL_URL = os.getenv("PUBLIC_CHANNEL_URL", "https://t.me/VedaTrader")
 MONGO_URI      = os.getenv("MONGO_URI", "")
 SECRET_KEY     = os.getenv("SECRET_KEY", "dev_secret_key")
 
@@ -57,6 +58,11 @@ MIN_BODY_ATR_RATIO = 0.3
 EMA_MAJOR_PERIOD = 200 # For HTF trend check
 VOL_EMA_PERIOD = 20    # For volume confirmation
 GOLD_SCORE_THRESHOLD = 85
+SIGNAL_MIN_SCORE = 60
+EMA_SPREAD_MIN = 0.00015
+VOLUME_CONFIRM_MULTIPLIER = 1.05
+RSI_MIDPOINT_BUY = 52
+RSI_MIDPOINT_SELL = 48
 
 # ══════════════════════════════════════════
 #  PAIR UNIVERSE
@@ -122,3 +128,14 @@ def is_dead_hour(pair_name: str) -> bool:
         if pair_name in ASIAN_PAIRS: return False
         return True
     return False
+
+def validate_runtime_config() -> list[str]:
+    """Return configuration issues that would break delivery/runtime."""
+    issues = []
+    if not TELEGRAM_TOKEN or TELEGRAM_TOKEN in ("YOUR_TOKEN_HERE", "YOUR_TELEGRAM_TOKEN"):
+        issues.append("TELEGRAM_BOT_TOKEN is missing or still placeholder.")
+    if not CHAT_ID or CHAT_ID in ("YOUR_CHAT_ID_HERE", "YOUR_CHANNEL_ID"):
+        issues.append("FREE_TELEGRAM_CHANNEL_ID is missing or still placeholder.")
+    if not MONGO_URI:
+        issues.append("MONGO_URI is not set (signals will not persist).")
+    return issues

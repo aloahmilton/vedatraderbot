@@ -30,7 +30,7 @@ SETUP:
   1. pip install yfinance pandas requests schedule python-dotenv pymongo ta
   2. Create .env file:
        TELEGRAM_BOT_TOKEN=your_token_here
-       TELEGRAM_CHANNEL_ID=your_chat_id_here
+       FREE_TELEGRAM_CHANNEL_ID=your_chat_id_here
        MONGO_URI=your_mongo_uri_here  (optional)
   3. python veda_trader_bot_v5.py
 """
@@ -46,11 +46,11 @@ from datetime import datetime, timezone, timedelta
 
 # Premium system - optional, fully backward compatible
 try:
-    from premium import gold_signal_check, fmt_gold_signal, GOLD_CHAT_ID
+    from premium import gold_signal_check, fmt_gold_signal, PREMIUM_CHANNEL_ID
     PREMIUM_ENABLED = True
 except ImportError:
     PREMIUM_ENABLED = False
-    GOLD_CHAT_ID = None
+    PREMIUM_CHANNEL_ID = None
 
 # Command handlers - separate file for cleanliness
 try:
@@ -74,7 +74,7 @@ load_dotenv()
 #  CREDENTIALS
 # ══════════════════════════════════════════
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TOKEN_HERE")
-CHAT_ID        = os.getenv("TELEGRAM_CHANNEL_ID", "YOUR_CHAT_ID_HERE")
+CHAT_ID        = os.getenv("FREE_TELEGRAM_CHANNEL_ID", "YOUR_CHAT_ID_HERE")
 MONGO_URI      = os.getenv("MONGO_URI", "")
 
 # ── MongoDB (optional, bot runs without it) ──
@@ -868,8 +868,8 @@ def scan_markets():
             arrow = "▲" if sig["type"] == "BUY" else "▼"
             
             # Send to gold channel if this is a GOLD signal
-            if PREMIUM_ENABLED and sig.get("is_gold", False) and GOLD_CHAT_ID:
-                send_telegram(fmt_gold_signal(sig), chat_id=GOLD_CHAT_ID)
+            if PREMIUM_ENABLED and sig.get("is_gold", False) and PREMIUM_CHANNEL_ID:
+                send_telegram(fmt_gold_signal(sig), chat_id=PREMIUM_CHANNEL_ID)
                 gold_tag = " 👑 GOLD"
             else:
                 gold_tag = ""

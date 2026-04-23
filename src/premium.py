@@ -2,8 +2,8 @@ import os
 from .config import GOLD_SCORE_THRESHOLD
 
 # Gold Chat ID can be set via env or hardcoded here if needed
-GOLD_CHAT_ID = os.getenv("GOLD_CHAT_ID", None)
-PREMIUM_ENABLED = GOLD_CHAT_ID is not None and GOLD_CHAT_ID != "your_gold_chat_id_here"
+PREMIUM_CHANNEL_ID = os.getenv("PREMIUM_TELEGRAM_CHANNEL_ID", os.getenv("PREMIUM_CHANNEL_ID", None))
+PREMIUM_ENABLED = PREMIUM_CHANNEL_ID is not None and PREMIUM_CHANNEL_ID not in ("your_PREMIUM_TELEGRAM_CHANNEL_ID_here", "your_PREMIUM_CHANNEL_ID_here", None)
 
 def gold_signal_check(rsi, adx, hist, bb_pos, score):
     """

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from functools import wraps
 import os
 import secrets
+import hmac
+import hashlib
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
@@ -19,7 +21,8 @@ app.secret_key = SECRET_KEY
 db = get_db()
 if db is None:
     print("CRITICAL: Could not connect to MongoDB")
-    # Fallback to local init if get_db fails (optional)
+    init_db()
+    db = get_db()
     
 users_collection   = db['users'] if db is not None else None
 signals_collection = db['signals'] if db is not None else None
@@ -40,6 +43,35 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 
+def verify_telegram_auth(data):
+    """Verify Telegram login widget data using bot token."""
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not bot_token:
+        return False
+
+    # Remove hash from data for verification
+    check_hash = data.get('hash')
+    if not check_hash:
+        return False
+
+    data_check = data.copy()
+    del data_check['hash']
+
+    # Sort keys alphabetically
+    data_check_arr = []
+    for key in sorted(data_check.keys()):
+        if data_check[key] is not None:
+            data_check_arr.append(f"{key}={data_check[key]}")
+
+    data_check_string = "\n".join(data_check_arr)
+
+    # Calculate expected hash
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    return hmac.compare_digest(expected_hash, check_hash)
+
+
 def admin_required(fn):
     @wraps(fn)
     def wrap(*a, **kw):
@@ -54,8 +86,16 @@ def admin_required(fn):
 def home():
     return render_template('home.html')
 
+def require_db():
+    if db is None or users_collection is None or signals_collection is None:
+        return "Database is not configured. Set MONGO_URI and restart.", 503
+    return None
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    db_err = require_db()
+    if db_err:
+        return db_err
     if request.method == 'POST':
         email    = request.form['email']
         password = request.form['password']
@@ -75,6 +115,9 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    db_err = require_db()
+    if db_err:
+        return db_err
     if request.method == 'POST':
         email    = request.form['email']
         password = request.form['password']
@@ -87,6 +130,9 @@ def login():
 
 @app.route('/dashboard')
 def dashboard():
+    db_err = require_db()
+    if db_err:
+        return db_err
     if 'user_id' not in session:
         return redirect(url_for('login'))
     user = users_collection.find_one({'_id': _oid(session['user_id'])})
@@ -95,6 +141,9 @@ def dashboard():
 
 @app.route('/verify-deposit', methods=['POST'])
 def verify_deposit():
+    db_err = require_db()
+    if db_err:
+        return jsonify({'status': 'error', 'message': 'Database unavailable'}), 503
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
     deposit_amount = float(request.form.get('amount', 0))
@@ -110,6 +159,9 @@ def verify_deposit():
 
 @app.route('/bot-status')
 def bot_status():
+    db_err = require_db()
+    if db_err:
+        return db_err
     status_doc     = db['bot_status'].find_one({'_id': 'latest'}) or {}
     recent_errors  = list(db['scan_errors'].find().sort('timestamp', -1).limit(10))
     recent_signals = list(signals_collection.find().sort('timestamp', -1).limit(20))
@@ -125,6 +177,59 @@ def bot_status():
 @app.route('/broker-signup')
 def broker_signup():
     return redirect(AFFILIATE_LINK)
+
+@app.route('/telegram-auth', methods=['POST'])
+def telegram_auth():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data received'}), 400
+
+        # Verify Telegram auth data
+        if not verify_telegram_auth(data):
+            return jsonify({'status': 'error', 'message': 'Invalid Telegram authentication'}), 401
+
+        telegram_id = str(data.get('id'))
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
+        username = data.get('username', '')
+
+        if not telegram_id:
+            return jsonify({'status': 'error', 'message': 'Invalid Telegram data'}), 400
+
+        # Check if user exists by telegram_id
+        user = users_collection.find_one({'telegram_id': telegram_id})
+
+        if not user:
+            # Create new user account
+            user_doc = {
+                'telegram_id': telegram_id,
+                'first_name': first_name,
+                'last_name': last_name,
+                'username': username,
+                'verified': True,
+                'deposit_verified': False,
+                'created_at': utc_now()
+            }
+            result = users_collection.insert_one(user_doc)
+            session['user_id'] = str(result.inserted_id)
+        else:
+            # Update existing user info
+            users_collection.update_one(
+                {'telegram_id': telegram_id},
+                {'$set': {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'username': username
+                }}
+            )
+            session['user_id'] = str(user['_id'])
+
+        return jsonify({'status': 'success', 'message': 'Authenticated successfully'})
+
+    except Exception as e:
+        print(f"Telegram auth error: {e}")
+        return jsonify({'status': 'error', 'message': 'Authentication failed'}), 500
 
 @app.route('/logout')
 def logout():
@@ -152,6 +257,9 @@ def admin_logout():
 @app.route('/admin')
 @admin_required
 def admin_overview():
+    db_err = require_db()
+    if db_err:
+        return db_err
     sigs = list(signals_collection.find().sort('timestamp', -1).limit(500))
     wins   = sum(1 for s in sigs if s.get('result') == 'WIN')
     losses = sum(1 for s in sigs if s.get('result') == 'LOSS')
@@ -177,18 +285,27 @@ def admin_overview():
 @app.route('/admin/signals')
 @admin_required
 def admin_signals():
+    db_err = require_db()
+    if db_err:
+        return db_err
     sigs = list(signals_collection.find().sort('timestamp', -1).limit(200))
     return render_template('admin/signals.html', signals=sigs)
 
 @app.route('/admin/users')
 @admin_required
 def admin_users():
+    db_err = require_db()
+    if db_err:
+        return db_err
     users = list(users_collection.find().sort('created_at', -1).limit(200))
     return render_template('admin/users.html', users=users)
 
 @app.route('/admin/errors')
 @admin_required
 def admin_errors():
+    db_err = require_db()
+    if db_err:
+        return db_err
     errors = list(db['scan_errors'].find().sort('timestamp', -1).limit(200))
     return render_template('admin/errors.html', errors=errors)
 
