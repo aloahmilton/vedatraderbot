@@ -1,4 +1,4 @@
-# Veda Trader Bot v5
+# Veda Trader Bot v5 
 ## TSS Tri Session Sentinel Trading Bot
 
 Professional real-time trading signal bot for Telegram with a clean, modular architecture.
