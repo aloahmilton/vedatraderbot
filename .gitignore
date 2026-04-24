@@ -1,3 +1,6 @@
+# Render
+.python-version
+
 # Python
 __pycache__/
 *.py[cod]

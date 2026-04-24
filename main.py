@@ -17,11 +17,8 @@ from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, flash, session as flask_session)
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
-from keep_alive import keep_alive
-# ... your other imports
+# keep_alive removed for Render compatibility
 
-keep_alive()
-# ... your main code (e.g., bot.run())
 
 
 
@@ -33,8 +30,9 @@ from src.config import (
 from src.engine import analyze_pair, evaluate_pending_signals
 from src.notifier import (
     send_telegram, fmt_signal, fmt_gold_signal,
-    fmt_session_announcement, fmt_watchlist,
-    fmt_session_report, handle_telegram_command, setup_bot_profile
+    fmt_session_announcement, fmt_session_close, fmt_watchlist,
+    fmt_session_report, fmt_weekend_close, fmt_weekend_open,
+    handle_telegram_command, setup_bot_profile
 )
 from src.database import (
     get_db, init_db, save_signal_to_db, record_signal_state,
@@ -296,8 +294,8 @@ def _deliver_signal(sig):
     if sig["tier"] == "public":
         return send_telegram(fmt_signal(sig, sig["no"]))
     if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
-        fmt  = fmt_gold_signal if sig.get("is_gold") else fmt_signal
-        sent = send_telegram(fmt(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
+        # All signals in the premium channel should use the premium template
+        sent = send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
         label = "GOLD" if sig.get("is_gold") else "PREMIUM"
         print(f"  [{label}] {'Sent' if sent else 'FAILED'} → {sig['pair']}")
         return sent
@@ -320,9 +318,35 @@ def scan_markets():
         print(f"[EVAL ERROR] {e}"); log_scan_error("evaluate_pending_signals", str(e))
 
     if sess != last_session_alerted:
+        if last_session_alerted:
+            send_telegram(fmt_session_close(last_session_alerted))
         send_telegram(fmt_session_announcement(sess), pin=True)
         send_telegram(fmt_watchlist(sess, pairs_for_session(sess)))
         last_session_alerted = sess
+
+    # ── Weekend Logic ──
+    day = now.weekday() # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+    # Friday Close (21:00 UTC)
+    if day == 4 and now.hour >= 21:
+        if last_session_alerted != "weekend":
+            send_telegram(fmt_weekend_close(), pin=True)
+            last_session_alerted = "weekend"
+        print("[MARKET] Weekend close reached. Scanning paused.")
+        return
+
+    # Saturday
+    if day == 5:
+        print("[MARKET] Saturday. Markets closed.")
+        return
+
+    # Sunday Open (21:00 UTC)
+    if day == 6:
+        if now.hour < 21:
+            print("[MARKET] Sunday. Markets opening soon...")
+            return
+        elif last_session_alerted == "weekend":
+            send_telegram(fmt_weekend_open(), pin=True)
+            # This will trigger session announcement on next scan because sess != "weekend"
 
     pairs = pairs_for_session(sess)
     print(f"[{now.strftime('%H:%M:%S')}] Scanning {len(pairs)} pairs ({sess})")

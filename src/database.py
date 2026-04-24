@@ -24,13 +24,38 @@ def get_db():
         init_db()
     return _db
 
-# In-memory state for deduplication
+# In-memory state for fast local caching
 last_signal_time = {}
 
 def is_dupe(pair: str, direction: str) -> bool:
-    last = last_signal_time.get(f"{pair}:{direction}")
-    if not last: return False
-    return (datetime.now(timezone.utc) - last).total_seconds() / 60 < DEDUPE_MIN
+    # 1. Check local cache first for speed
+    local_last = last_signal_time.get(f"{pair}:{direction}")
+    if local_last:
+        if (datetime.now(timezone.utc) - local_last).total_seconds() / 60 < DEDUPE_MIN:
+            return True
+
+    # 2. Check Database (Source of Truth for persistence)
+    db = get_db()
+    if db is not None:
+        try:
+            last_sig = db["signals"].find_one(
+                {"pair": pair, "type": direction},
+                sort=[("timestamp", -1)]
+            )
+            if last_sig:
+                last_time = last_sig["timestamp"]
+                if last_time.tzinfo is None:
+                    last_time = last_time.replace(tzinfo=timezone.utc)
+                
+                diff = (datetime.now(timezone.utc) - last_time).total_seconds() / 60
+                if diff < DEDUPE_MIN:
+                    # Sync local cache
+                    last_signal_time[f"{pair}:{direction}"] = last_time
+                    return True
+        except Exception as e:
+            print(f"[DB Error] Dupe check failed: {e}")
+    
+    return False
 
 def record_signal_state(pair: str, direction: str):
     last_signal_time[f"{pair}:{direction}"] = datetime.now(timezone.utc)

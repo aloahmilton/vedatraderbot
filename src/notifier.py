@@ -36,6 +36,15 @@ def send_telegram(msg: str, pin: bool = False, chat_id: str = None, **kwargs) ->
         print(f"  [Telegram Error] {e}")
         return False
 
+def delete_telegram_message(message_id: int, chat_id: str = None) -> bool:
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteMessage"
+    target_chat = chat_id if chat_id is not None else CHAT_ID
+    try:
+        r = requests.post(url, json={"chat_id": target_chat, "message_id": message_id}, timeout=5)
+        return r.json().get("ok", False)
+    except:
+        return False
+
 def send_voice(voice_file_path: str, caption: str = None, chat_id: str = None) -> bool:
     """Send voice message to Telegram. voice_file_path should be path to .ogg or .mp3 file."""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVoice"
@@ -114,28 +123,40 @@ def fmt_signal(sig: dict, sig_no: int = 0) -> str:
     )
 
 def fmt_gold_signal(sig: dict, sig_no: int = 0):
-    """Premium formatting for gold signals."""
+    """Premium formatting for gold signals - completely unique from free signals."""
     is_buy = sig["type"] == "BUY"
-    icon = "👑"
-    arrow = "🚀 <b>BUY / CALL</b>" if is_buy else "📉 <b>SELL / PUT</b>"
+    icon = "🟡" if not sig.get("is_gold") else "👑"
+    arrow = "📈 <b>BUY</b>" if is_buy else "📉 <b>SELL</b>"
+    color = "🟢" if is_buy else "🔴"
     
-    # Gold signals are high accuracy setups
-    base_msg = fmt_signal(sig, sig_no)
+    now = datetime.now(timezone.utc)
+    now_str = now.strftime("%H:%M")
+    base = now.replace(second=0, microsecond=0)
+    t1 = (base + timedelta(minutes=EXPIRY_MINUTES)).strftime("%H:%M")
+    
+    header = "VEDA TRADER — PREMIUM" if not sig.get("is_gold") else "VEDA TRADER — ELITE GOLD"
     
     return (
-        f"👑 <b>VEDA TRADER — GOLD SIGNAL</b> 👑\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💎 <b>PREMIUM SELECTION</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{icon} <b>{header}</b> {icon}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"🎯 {sig['pair']} — {arrow}\n"
-        f"📊 Accuracy Score: <b>{sig['score']}/100</b>\n"
+        f"💎 <b>ASSET:</b>  {sig['pair']}\n"
+        f"🕹 <b>ACTION:</b>  {arrow}\n"
+        f"💰 <b>PRICE:</b>   <code>{sig['price']:.5f}</code>\n"
         f"\n"
-        f"🛡 <i>This signal met all 'Best of the Best' filters including 1H trend and Volume confirmation.</i>\n"
+        f"⏰ <b>TIME:</b>    <code>{now_str} UTC</code>\n"
+        f"⏳ <b>EXPIRY:</b>  <code>{t1} ({EXPIRY_MINUTES}M)</code>\n"
         f"\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"✨ {base_msg}"
+        f"📊 <b>SETUP QUALITY:</b>\n"
+        f"   ┣ Score: <b>{sig['score']}/100</b>\n"
+        f"   ┣ Trend: <b>{sig['trend']}</b>\n"
+        f"   ┗ RSI: <b>{sig['rsi']}</b>\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Verified Institutional Setup</i>\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
     )
+
 
 def fmt_session_announcement(sess: str) -> str:
     SESSION_META = {
@@ -153,6 +174,54 @@ def fmt_session_announcement(sess: str) -> str:
         f"🎯 <b>v5 filters active:</b> ATR + ADX + 15M trend\n"
         f"📉 Expect fewer signals, but much higher quality.\n"
         f"💎 <b>Stay sharp.</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+def fmt_session_close(sess: str) -> str:
+    SESSION_META = {
+        "asian":   ("ASIAN SESSION",       "🌏"),
+        "london":  ("LONDON SESSION",      "🇬🇧"),
+        "overlap": ("LONDON × NY OVERLAP", "🔥"),
+        "newyork": ("NEW YORK SESSION",    "🇺🇸"),
+    }
+    label, emoji = SESSION_META.get(sess, ("SESSION", "🔔"))
+    
+    return (
+        f"🏁 <b>{label} — NOW CLOSED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"The {label.lower()} has officially ended.\n"
+        f"Hope you had a profitable run! 💰\n"
+        f"\n"
+        f"Stay tuned for the next high-probability setup.\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+def fmt_weekend_close() -> str:
+    return (
+        f"🥳 <b>WEEKEND MODE ACTIVATED</b> 🥂\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"Forex markets are officially <b>CLOSED</b> for the week.\n"
+        f"\n"
+        f"Time to step away from the charts, enjoy the sun, and spend time with family. Your mental capital is just as important as your trading capital! 🧘‍♂️\n"
+        f"\n"
+        f"We'll be back on <b>Sunday at 21:00 UTC</b> for the Asian open.\n"
+        f"\n"
+        f"Have a great weekend, Veda Traders! ✨\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+def fmt_weekend_open() -> str:
+    return (
+        f"🚀 <b>MARKETS ARE RE-OPENING!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"The weekend is over and the <b>Asian Session</b> is warming up!\n"
+        f"\n"
+        f"Get your watchlists ready and your coffee brewed. Let's make this a legendary week in the markets! 📈\n"
+        f"\n"
+        f"📡 <i>Initial scans starting now...</i>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
@@ -434,6 +503,33 @@ def handle_telegram_command(update: dict, send_telegram_func, PREMIUM_ENABLED: b
                     send_telegram_func("❌ Could not update GOLD membership.", chat_id=chat_id)
             else:
                 send_telegram_func("Usage: /addgold <user_id> <days>", chat_id=chat_id)
+
+        elif text.startswith("/clearchannel"):
+            if admin_ids and user_id not in admin_ids:
+                send_telegram_func("🚫 Admin only.", chat_id=chat_id)
+                return
+            
+            parts = text.split()
+            count = 100 # default
+            if len(parts) > 1:
+                try: count = int(parts[1])
+                except: pass
+            
+            send_telegram_func(f"🧹 <b>CLEANING CHANNEL...</b>\nAttempting to delete last {count} messages.", chat_id=chat_id)
+            
+            # Since we don't have the last message IDs stored, we have to guess 
+            # based on the current message ID and go backwards.
+            curr_id = message.get("message_id")
+            if not curr_id:
+                send_telegram_func("❌ Could not determine current message ID.", chat_id=chat_id)
+                return
+                
+            deleted = 0
+            for i in range(count):
+                if delete_telegram_message(curr_id - i):
+                    deleted += 1
+            
+            send_telegram_func(f"✅ <b>CLEANUP COMPLETE</b>\nDeleted approx {deleted} messages.", chat_id=chat_id)
 
     except Exception as e:
         print(f"[COMMAND HANDLER] {e}")
