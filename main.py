@@ -1,7 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════╗
-║          VEDA TRADER — main.py (SESSION CONTROLLED)      ║
-║   Signal Bot  +  Web Dashboard  in one single file       ║
+║           VEDA TRADER — online🟢 |v5                    ║
 ╚══════════════════════════════════════════════════════════╝
 
 ✅ TRADES ONLY DURING 4 MAIN SESSIONS
