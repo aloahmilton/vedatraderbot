@@ -1,15 +1,17 @@
 """
 ╔══════════════════════════════════════════════════════════╗
-║          VEDA TRADER — main.py (All-in-One)              ║
+║          VEDA TRADER — main.py (SESSION CONTROLLED)      ║
 ║   Signal Bot  +  Web Dashboard  in one single file       ║
 ╚══════════════════════════════════════════════════════════╝
 
-Start everything with just:
-    python main.py
+✅ TRADES ONLY DURING 4 MAIN SESSIONS
+✅ SKIPS WEEKENDS COMPLETELY  
+✅ 30MIN PRE-SESSION NOTIFICATIONS
+✅ SESSION OPEN/CLOSE ALERTS
 """
 
 import os, time, hmac, hashlib, threading, schedule, requests, logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -17,10 +19,6 @@ from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, flash, session as flask_session)
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
-# keep_alive removed for Render compatibility
-
-
-
 
 from src.config import (
     pairs_for_session, current_session, session_label,
@@ -64,8 +62,62 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "VedaGold2026!")
 
 # ── Bot state ─────────────────────────────────────────────
 session_signals:      list = []
-last_session_alerted: str  = ""
 last_update_id:       int  = 0
+notified_sessions:    set  = set()  # Track which sessions we've notified
+
+# ══════════════════════════════════════════════════════════
+#  TRADING SESSIONS (UTC) — ONLY 4 SESSIONS
+# ══════════════════════════════════════════════════════════
+TRADING_SESSIONS = {
+    "asian":    {"start": 0,  "end": 9,  "label": "🌏 Asian Session"},
+    "london":   {"start": 8,  "end": 17, "label": "🇬🇧 London Session"},
+    "newyork":  {"start": 13, "end": 20, "label": "🇺🇸 New York Session"},
+}
+
+def is_weekend():
+    """Check if Saturday (5) or Sunday (6) — NO TRADING"""
+    now = datetime.now(timezone.utc)
+    return now.weekday() >= 5
+
+def get_active_session():
+    """Return current active session or None if outside trading hours"""
+    if is_weekend():
+        return None
+    
+    now = datetime.now(timezone.utc)
+    hour = now.hour
+    
+    for sess_name, sess_info in TRADING_SESSIONS.items():
+        if sess_info["start"] <= hour < sess_info["end"]:
+            return sess_name
+    return None
+
+def is_trading_hours():
+    """Return True if we're currently in trading hours"""
+    return get_active_session() is not None
+
+def time_to_session_open(session_name):
+    """Return minutes until session opens, or None if already open"""
+    now = datetime.now(timezone.utc)
+    hour = now.hour
+    minute = now.minute
+    
+    if session_name not in TRADING_SESSIONS:
+        return None
+    
+    start_hour = TRADING_SESSIONS[session_name]["start"]
+    end_hour = TRADING_SESSIONS[session_name]["end"]
+    
+    # If session is currently open
+    if start_hour <= hour < end_hour:
+        return None
+    
+    # Calculate minutes until opening
+    if hour < start_hour:
+        return (start_hour - hour) * 60 - minute
+    else:
+        # Next day session
+        return ((24 - hour) + start_hour) * 60 - minute
 
 # ══════════════════════════════════════════════════════════
 #  FLASK APP
@@ -288,17 +340,19 @@ def admin_errors():
         errors=list(db["scan_errors"].find().sort("timestamp",-1).limit(200)))
 
 # ══════════════════════════════════════════════════════════
-#  BOT LOGIC
+#  BOT LOGIC — SESSION CONTROLLED
 # ══════════════════════════════════════════════════════════
+
 def _deliver_signal(sig):
+    """Route signals to correct channels"""
     if sig["tier"] == "public":
         return send_telegram(fmt_signal(sig, sig["no"]))
-    if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
-        # All signals in the premium channel should use the premium template
-        sent = send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
-        label = "GOLD" if sig.get("is_gold") else "PREMIUM"
-        print(f"  [{label}] {'Sent' if sent else 'FAILED'} → {sig['pair']}")
-        return sent
+    if sig["tier"] == "premium":
+        if PREMIUM_ENABLED and PREMIUM_CHANNEL_ID:
+            sent = send_telegram(fmt_gold_signal(sig, sig["no"]), chat_id=PREMIUM_CHANNEL_ID)
+            label = "GOLD" if sig.get("is_gold") else "PREMIUM"
+            print(f"  [{label}] {'Sent' if sent else 'FAILED'} → {sig['pair']}")
+            return sent
     return False
 
 def _store_signal(sig, delivered):
@@ -306,50 +360,88 @@ def _store_signal(sig, delivered):
     save_signal_to_db(sig)
     record_signal_state(sig["pair"], sig["type"])
 
-def scan_markets():
-    global session_signals, last_session_alerted
-    now  = datetime.now(timezone.utc)
-    sess = current_session()
-    sent_ok = sent_fail = scanned = generated = 0
+def handle_session_notifications():
+    """Send 30min pre-session and session open/close notifications"""
+    global notified_sessions
+    
+    now = datetime.now(timezone.utc)
+    current_session = get_active_session()
+    
+    for sess_name, sess_info in TRADING_SESSIONS.items():
+        mins_to_open = time_to_session_open(sess_name)
+        
+        # ⏰ 30 MINUTES BEFORE SESSION
+        if mins_to_open is not None and 29 <= mins_to_open <= 31:
+            if f"{sess_name}_30min" not in notified_sessions:
+                msg = f"⏰ <b>{sess_info['label']}</b> opens in 30 minutes!\n\nGet your watchlist ready. High-probability setups incoming! 📈"
+                send_telegram(msg, pin=True)
+                notified_sessions.add(f"{sess_name}_30min")
+                print(f"[NOTIFY] ⏰ 30min pre-session: {sess_name}")
+        
+        # 🟢 SESSION JUST OPENED
+        if sess_name == current_session and f"{sess_name}_open" not in notified_sessions:
+            pairs = [p for p in ALL_PAIRS if p["session"] in ("all", sess_name)]
+            send_telegram(fmt_session_announcement(sess_name), pin=True)
+            send_telegram(fmt_watchlist(sess_name, pairs))
+            notified_sessions.add(f"{sess_name}_open")
+            print(f"[NOTIFY] 🟢 Session open: {sess_name}")
+        
+        # 🔴 SESSION JUST CLOSED
+        elif sess_name != current_session and f"{sess_name}_close" not in notified_sessions:
+            prev_hour = (now - timedelta(minutes=5)).hour
+            if sess_info["start"] <= prev_hour < sess_info["end"] and not (sess_info["start"] <= now.hour < sess_info["end"]):
+                send_telegram(fmt_session_close(sess_name))
+                notified_sessions.add(f"{sess_name}_close")
+                print(f"[NOTIFY] 🔴 Session closed: {sess_name}")
+    
+    # Reset notifications at midnight UTC
+    if now.hour == 0 and now.minute == 0:
+        notified_sessions.clear()
 
+def scan_markets():
+    """Scan markets ONLY during active trading sessions (Mon-Fri, 4 sessions only)"""
+    global session_signals
+    
+    now = datetime.now(timezone.utc)
+    
+    # ❌ STOP: NO TRADING ON WEEKENDS
+    if is_weekend():
+        day_name = "Saturday" if now.weekday() == 5 else "Sunday"
+        print(f"[{now.strftime('%H:%M:%S')}] 🛑 {day_name} - NO TRADING. Scanning paused.")
+        return
+    
+    # ❌ STOP: NO TRADING OUTSIDE SESSIONS
+    active_session = get_active_session()
+    if active_session is None:
+        next_sess = None
+        hour = now.hour
+        for sess_name, sess_info in TRADING_SESSIONS.items():
+            mins = time_to_session_open(sess_name)
+            if mins is not None and (next_sess is None or mins < time_to_session_open(next_sess)):
+                next_sess = sess_name
+        next_label = TRADING_SESSIONS[next_sess]["label"] if next_sess else "Unknown"
+        print(f"[{now.strftime('%H:%M:%S')}] ⏸ Outside trading hours. Next: {next_label}")
+        handle_session_notifications()  # Still send pre-session alerts
+        return
+    
+    # ✅ WE'RE IN A TRADING SESSION
+    print(f"[{now.strftime('%H:%M:%S')}] ✅ TRADING ACTIVE: {TRADING_SESSIONS[active_session]['label']}")
+    
+    # Handle notifications
+    handle_session_notifications()
+    
+    # Evaluate pending signals
     try:
         evaluate_pending_signals(session_signals)
     except Exception as e:
-        print(f"[EVAL ERROR] {e}"); log_scan_error("evaluate_pending_signals", str(e))
-
-    if sess != last_session_alerted:
-        if last_session_alerted:
-            send_telegram(fmt_session_close(last_session_alerted))
-        send_telegram(fmt_session_announcement(sess), pin=True)
-        send_telegram(fmt_watchlist(sess, pairs_for_session(sess)))
-        last_session_alerted = sess
-
-    # ── Weekend Logic ──
-    day = now.weekday() # 0=Mon, 4=Fri, 5=Sat, 6=Sun
-    # Friday Close (21:00 UTC)
-    if day == 4 and now.hour >= 21:
-        if last_session_alerted != "weekend":
-            send_telegram(fmt_weekend_close(), pin=True)
-            last_session_alerted = "weekend"
-        print("[MARKET] Weekend close reached. Scanning paused.")
-        return
-
-    # Saturday
-    if day == 5:
-        print("[MARKET] Saturday. Markets closed.")
-        return
-
-    # Sunday Open (21:00 UTC)
-    if day == 6:
-        if now.hour < 21:
-            print("[MARKET] Sunday. Markets opening soon...")
-            return
-        elif last_session_alerted == "weekend":
-            send_telegram(fmt_weekend_open(), pin=True)
-            # This will trigger session announcement on next scan because sess != "weekend"
-
-    pairs = pairs_for_session(sess)
-    print(f"[{now.strftime('%H:%M:%S')}] Scanning {len(pairs)} pairs ({sess})")
+        print(f"[EVAL ERROR] {e}")
+        log_scan_error("evaluate_pending_signals", str(e))
+    
+    # Scan pairs for current session
+    pairs = pairs_for_session(active_session)
+    sent_ok = sent_fail = scanned = generated = 0
+    
+    print(f"Scanning {len(pairs)} pairs ({TRADING_SESSIONS[active_session]['label']})")
 
     for p in pairs:
         scanned += 1
@@ -358,33 +450,42 @@ def scan_markets():
         except Exception as e:
             print(f"  [SCAN ERROR] {p.get('name','?')}: {e}")
             log_scan_error("analyze_pair", f"{p.get('name','?')}: {e}")
-            time.sleep(0.5); continue
+            time.sleep(0.5)
+            continue
 
         if sig:
             generated += 1
-            sig["no"]        = len(session_signals) + 1
+            sig["no"] = len(session_signals) + 1
             sig["timestamp"] = datetime.now(timezone.utc)
             sig["direction"] = sig["type"]
+            
             delivered = _deliver_signal(sig)
             _store_signal(sig, delivered)
             session_signals.append(sig)
+            
             if sig["tier"] == "public":
-                if delivered: sent_ok   += 1; print(f"  [✓ SIGNAL] {sig['pair']} {sig['type']}  score={sig['score']}")
-                else:         sent_fail += 1; print(f"  [✗ SIGNAL] {sig['pair']} DELIVERY FAILED")
+                if delivered:
+                    sent_ok += 1
+                    print(f"  [✓ SIGNAL] {sig['pair']} {sig['type']}  score={sig['score']}")
+                else:
+                    sent_fail += 1
+                    print(f"  [✗ SIGNAL] {sig['pair']} DELIVERY FAILED")
             else:
                 print(f"  [PREMIUM] {sig['pair']} {sig['type']}  score={sig['score']}")
+        
         time.sleep(0.5)
 
-    if (now.hour, now.minute) in [(6,55),(15,55),(20,55)]:
+    # Session report at session close times
+    if (now.hour, now.minute) in [(9,0), (17,0), (20,0)]:
         send_telegram(fmt_session_report(session_signals, now.strftime("%d %b").upper()))
         session_signals = []
 
     upsert_bot_status({
-        "last_scan_at":      datetime.now(timezone.utc).replace(tzinfo=None),
-        "session":           sess,
-        "pairs_scanned":     scanned,
+        "last_scan_at": datetime.now(timezone.utc).replace(tzinfo=None),
+        "session": active_session,
+        "pairs_scanned": scanned,
         "signals_generated": generated,
-        "signals_sent_ok":   sent_ok,
+        "signals_sent_ok": sent_ok,
         "signals_sent_fail": sent_fail,
     })
 
@@ -402,9 +503,11 @@ def poll_commands():
             if data.get("ok") and data.get("result"):
                 for upd in data["result"]:
                     last_update_id = max(last_update_id, upd["update_id"])
-                    try:    handle_telegram_command(upd, send_telegram, PREMIUM_ENABLED)
+                    try:
+                        handle_telegram_command(upd, send_telegram, PREMIUM_ENABLED)
                     except Exception as e:
-                        print(f"[CMD ERROR] {e}"); log_scan_error("telegram_command", str(e))
+                        print(f"[CMD ERROR] {e}")
+                        log_scan_error("telegram_command", str(e))
     except Exception as e:
         print(f"[POLL ERROR] {e}")
 
@@ -415,37 +518,51 @@ def main():
     for issue in validate_runtime_config():
         print(f"[CONFIG] {issue}")
 
-    print("=" * 52)
-    print("  VEDA TRADER — Bot + Dashboard starting")
-    print("=" * 52)
+    print("=" * 70)
+    print("  🚀 VEDA TRADER v5 — SESSION CONTROLLED BOT")
+    print("=" * 70)
+    print("  📅 TRADING SESSIONS (UTC, Mon-Fri ONLY):")
+    print("     🌏 Asian:     00:00 - 09:00 UTC")
+    print("     🇬🇧 London:   08:00 - 17:00 UTC")
+    print("     🇺🇸 New York: 13:00 - 20:00 UTC")
+    print("  ⏰ 30min pre-session notifications")
+    print("  🔔 Session open/close alerts")
+    print("  🛑 NO TRADING: Weekends, Outside Sessions")
+    print("=" * 70)
 
-    # Web dashboard in background thread
+    # Web dashboard
     port = int(os.getenv("PORT", 5000))
-    web  = threading.Thread(
+    web = threading.Thread(
         target=lambda: app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False),
         daemon=True, name="WebDashboard"
     )
     web.start()
-    print(f"[WEB] Dashboard → http://0.0.0.0:{port}")
+    print(f"[WEB] Dashboard → http://0.0.0.0:{port}\n")
 
     send_telegram(
         "🚀 <b>VEDA TRADER v5 ONLINE</b>\n"
-        "Signal bot + web dashboard both running."
+        "Trading bot + web dashboard running.\n\n"
+        "📅 <b>TRADING SCHEDULE (UTC):</b>\n"
+        "🌏 Asian: 00:00 - 09:00\n"
+        "🇬🇧 London: 08:00 - 17:00\n"
+        "🇺🇸 New York: 13:00 - 20:00\n\n"
+        "⏰ 30min pre-session alerts\n"
+        "📡 Forex → FREE channel\n"
+        "💎 Premium → PREMIUM channel\n"
+        "🛑 Weekends: NO TRADING"
     )
     setup_bot_profile()
 
     scan_markets()
     schedule.every(5).minutes.do(scan_markets)
 
-    print("[BOT] Running. Ctrl+C to stop.")
+    print("[BOT] ✅ Running. Only trading during 4 main sessions.")
+    print("[BOT] Ctrl+C to stop.\n")
+    
     while True:
         schedule.run_pending()
         poll_commands()
         time.sleep(2)
-
-
-    
-    
 
 if __name__ == "__main__":
     main()
