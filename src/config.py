@@ -95,15 +95,22 @@ ALL_PAIRS = [
     
     # 💎 PREMIUM ASSETS
     {"name": "US30",    "ticker": "^DJI",     "session": "newyork", "tier": "premium", "category": "indices"},
-    {"name": "NAS100",  "ticker": "^IXIC",    "session": "newyork", "tier": "premium", "category": "indices"},
+    {"name": "US500",   "ticker": "^GSPC",    "session": "newyork", "tier": "premium", "category": "indices"},
+    {"name": "NAS100",  "ticker": "^NDX",     "session": "newyork", "tier": "premium", "category": "indices"},
     {"name": "GER40",   "ticker": "^GDAXI",   "session": "london",  "tier": "premium", "category": "indices"},
     {"name": "GOLD",    "ticker": "GC=F",     "session": "all",     "tier": "premium", "category": "commodities"},
+    {"name": "SILVER",  "ticker": "SI=F",     "session": "all",     "tier": "premium", "category": "commodities"},
     {"name": "USOIL",   "ticker": "CL=F",     "session": "newyork", "tier": "premium", "category": "commodities"},
+    {"name": "BRENT",   "ticker": "BZ=F",     "session": "london",  "tier": "premium", "category": "commodities"},
     {"name": "NVDA",    "ticker": "NVDA",     "session": "newyork", "tier": "premium", "category": "stocks"},
     {"name": "TSLA",    "ticker": "TSLA",     "session": "newyork", "tier": "premium", "category": "stocks"},
     {"name": "AAPL",    "ticker": "AAPL",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "MSFT",    "ticker": "MSFT",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "META",    "ticker": "META",     "session": "newyork", "tier": "premium", "category": "stocks"},
+    {"name": "AMD",     "ticker": "AMD",      "session": "newyork", "tier": "premium", "category": "stocks"},
     {"name": "BTC/USD", "ticker": "BTC-USD",  "session": "all",     "tier": "premium", "category": "crypto"},
     {"name": "ETH/USD", "ticker": "ETH-USD",  "session": "all",     "tier": "premium", "category": "crypto"},
+    {"name": "SOL/USD", "ticker": "SOL-USD",  "session": "all",     "tier": "premium", "category": "crypto"},
 ]
 
 # ══════════════════════════════════════════

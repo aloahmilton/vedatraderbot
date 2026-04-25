@@ -49,7 +49,7 @@ def evaluate_pending_signals(session_signals):
 
         send_telegram(fmt_result_msg(s))
         update_signal_result(s["pair"], s["timestamp"], s["result"], exit_price)
-        print(f"  [OUTCOME] #{s['no']} {s['pair']} → {s['result']}")
+        print(f"  [OUTCOME] #{s['no']} {s['pair']} -> {s['result']}")
 
 # fetch_ohlcv is imported from .fetcher (multi-source: yfinance + Stooq fallback)
 

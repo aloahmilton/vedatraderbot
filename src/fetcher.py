@@ -30,10 +30,11 @@ _STOOQ_MAP = {
     "EURCAD=X": "eurcad",   "GBPCAD=X": "gbpcad",   "CADJPY=X": "cadjpy",
     "AUDJPY=X": "audjpy",   "NZDJPY=X": "nzdjpy",   "AUDNZD=X": "audnzd",
     # Premium
-    "GC=F":   "gc.f",       "CL=F":   "cl.f",
-    "^DJI":   "dji",        "^IXIC":  "ixic",        "^GDAXI": "dax",
+    "GC=F":   "gc.f",       "SI=F":   "si.f",        "CL=F":   "cl.f",
+    "^DJI":   "dji",        "^GSPC":  "spx",         "^NDX":   "ndx",         "^GDAXI": "dax",
     "NVDA":   "nvda.us",    "TSLA":   "tsla.us",     "AAPL":   "aapl.us",
-    "BTC-USD": "btcusd",    "ETH-USD": "ethusd",
+    "MSFT":   "msft.us",    "META":   "meta.us",     "AMD":    "amd.us",
+    "BTC-USD": "btcusd",    "ETH-USD": "ethusd",     "SOL-USD": "solusd",
 }
 
 # ── Stooq interval map  (yfinance interval → Stooq interval char) ─────────
