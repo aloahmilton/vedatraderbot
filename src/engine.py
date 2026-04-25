@@ -6,7 +6,9 @@ from .config import (
     ADX_MIN, ATR_MIN_BPS, BB_SQUEEZE_THRESHOLD, MIN_BODY_ATR_RATIO,
     VOL_EMA_PERIOD, GOLD_SCORE_THRESHOLD, SIGNAL_MIN_SCORE, EMA_SPREAD_MIN,
     VOLUME_CONFIRM_MULTIPLIER, RSI_MIDPOINT_BUY, RSI_MIDPOINT_SELL,
-    SR_LOOKBACK, SR_PROXIMITY, RISK_REWARD, STOP_PERCENT, EXPIRY_MINUTES
+    SR_LOOKBACK, SR_PROXIMITY, RISK_REWARD, STOP_PERCENT, EXPIRY_MINUTES,
+    PREMIUM_SIGNAL_MIN_SCORE, ADX_STRONG_MIN, TREND_SPREAD_STRONG_MIN,
+    EMA_PULLBACK_MAX, WICK_RATIO_MAX
 )
 # BUG FIX: replaced direct yfinance calls with the multi-source fetcher
 from .fetcher import fetch_ohlcv
@@ -88,6 +90,21 @@ def quality_score(rsi, adx, atr_bps, bb_width, macd_hist, trend_aligned, body_ra
     if trend_aligned: score += 10
     return min(100, score)
 
+def asset_signal_floor(category: str, tier: str) -> int:
+    if tier == "premium" or category in {"indices", "stocks", "crypto", "commodities"}:
+        return PREMIUM_SIGNAL_MIN_SCORE
+    return SIGNAL_MIN_SCORE
+
+def candle_quality(df: pd.DataFrame, direction: str, atr_now: float) -> tuple[float, float, float]:
+    last = df.iloc[-1]
+    body = abs(float(last["close"]) - float(last["open"]))
+    upper_wick = float(last["high"]) - max(float(last["close"]), float(last["open"]))
+    lower_wick = min(float(last["close"]), float(last["open"])) - float(last["low"])
+    body_atr_ratio = body / atr_now if atr_now > 0 else 0.0
+    against_wick = upper_wick if direction == "BUY" else lower_wick
+    wick_ratio = against_wick / body if body > 0 else float("inf")
+    return body_atr_ratio, wick_ratio, body
+
 def analyze_pair(pair_info: dict) -> dict | None:
     name, ticker = pair_info["name"], pair_info["ticker"]
     tier = pair_info.get("tier", "public")
@@ -135,7 +152,7 @@ def analyze_pair(pair_info: dict) -> dict | None:
     rsi_sell_ok = RSI_SELL_MIN <= rsi_now <= RSI_SELL_MAX
 
     if body_ratio < MIN_BODY_ATR_RATIO: return None
-    if too_close_to_sr(price, find_sr_levels(df)): return None
+    if too_close_to_sr(price, find_sr_levels(df, SR_LOOKBACK), SR_PROXIMITY): return None
 
     buy_sig = bull_cross and trend == "UP" and macd_bull and rsi_buy_ok and price > bb_m.iloc[-1]
     sell_sig = bear_cross and trend == "DOWN" and macd_bear and rsi_sell_ok and price < bb_m.iloc[-1]
@@ -143,6 +160,20 @@ def analyze_pair(pair_info: dict) -> dict | None:
     if not buy_sig and not sell_sig: return None
     
     direction = "BUY" if buy_sig else "SELL"
+    candle_body_ratio, against_wick_ratio, candle_body = candle_quality(df, direction, atr_now)
+
+    if candle_body_ratio < MIN_BODY_ATR_RATIO:
+        return None
+    if against_wick_ratio > WICK_RATIO_MAX:
+        return None
+
+    price_to_fast_ema = abs(price - f0) / price if price else 0
+    if price_to_fast_ema > EMA_PULLBACK_MAX:
+        return None
+
+    trend_spread = abs(f0 - s0) / price if price else 0
+    if adx_now < ADX_STRONG_MIN and trend_spread < TREND_SPREAD_STRONG_MIN:
+        return None
     
     # ── VOLUME CONFIRMATION (New) ──
     v_ema = calc_vol_ema(df["volume"], VOL_EMA_PERIOD).iloc[-1]
@@ -158,7 +189,7 @@ def analyze_pair(pair_info: dict) -> dict | None:
     if is_dupe(name, direction): return None
 
     score = quality_score(rsi_now, adx_now, atr_bps, bb_width, hist_now, True, body_ratio, direction)
-    if score < SIGNAL_MIN_SCORE:
+    if score < asset_signal_floor(category, tier):
         return None
 
     sl = round(price * (1 - STOP_PERCENT/100 if direction == "BUY" else 1 + STOP_PERCENT/100), 6)
@@ -174,6 +205,10 @@ def analyze_pair(pair_info: dict) -> dict | None:
         "type": direction, "pair": name, "price": price, "sl": sl, "tp": tp,
         "rsi": round(rsi_now, 1), "adx": round(adx_now, 1), "atr_bps": round(atr_bps, 1),
         "score": score, "trend": trend, "is_gold": is_gold,
-        "ticker": ticker, "tier": tier, "category": category
+        "ticker": ticker, "tier": tier, "category": category,
+        "ema_gap_bps": round(trend_spread * 10000, 1),
+        "wick_ratio": round(against_wick_ratio, 2),
+        "entry_gap_bps": round(price_to_fast_ema * 10000, 1),
+        "body_atr_ratio": round(candle_body_ratio, 2)
     }
     return signal

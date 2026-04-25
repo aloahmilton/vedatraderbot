@@ -63,6 +63,12 @@ EMA_SPREAD_MIN = 0.00015
 VOLUME_CONFIRM_MULTIPLIER = 1.05
 RSI_MIDPOINT_BUY = 52
 RSI_MIDPOINT_SELL = 48
+PREMIUM_SIGNAL_MIN_SCORE = 70
+ADX_STRONG_MIN = 24
+TREND_SPREAD_STRONG_MIN = 0.00035
+EMA_PULLBACK_MAX = 0.0016
+WICK_RATIO_MAX = 1.35
+SESSION_REPORT_TIMES_UTC = [(6, 55), (15, 55), (20, 55)]
 
 # ══════════════════════════════════════════
 #  PAIR UNIVERSE
@@ -121,6 +127,15 @@ def session_label(s: str) -> str:
 def pairs_for_session(s: str) -> list:
     tag = "london" if s == "overlap" else s
     return [p for p in ALL_PAIRS if p["session"] in ("all", tag)]
+
+def public_pairs_for_session(s: str) -> list:
+    return [p for p in pairs_for_session(s) if p.get("tier") == "public" and p.get("category") == "forex"]
+
+def premium_pairs_for_session(s: str) -> list:
+    return [p for p in pairs_for_session(s) if p.get("tier") == "premium"]
+
+def premium_crypto_pairs() -> list:
+    return [p for p in ALL_PAIRS if p.get("tier") == "premium" and p.get("category") == "crypto"]
 
 def is_dead_hour(pair_name: str) -> bool:
     h = datetime.now(timezone.utc).hour
