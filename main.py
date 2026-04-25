@@ -1,7 +1,7 @@
-"""
+ï»¿"""
 +----------------------------------------------------------+
-¦          VEDA TRADER — main.py (All-in-One)              ¦
-¦   Signal Bot  +  Web Dashboard  in one single file       ¦
+ï¿½          VEDA TRADER ï¿½ main.py (All-in-One)              ï¿½
+ï¿½   Signal Bot  +  Web Dashboard  in one single file       ï¿½
 +----------------------------------------------------------+
 
 Start everything with just:
@@ -323,6 +323,19 @@ def _send_session_broadcasts(sess: str):
         if premium_pairs:
             send_telegram(fmt_watchlist(sess, premium_pairs), chat_id=PREMIUM_CHANNEL_ID)
 
+def _send_premium_weekend_broadcasts():
+    crypto_pairs = premium_crypto_pairs()
+    if not (PREMIUM_ENABLED and PREMIUM_CHANNEL_ID and crypto_pairs):
+        return
+    send_telegram(
+        "<b>PREMIUM WEEKEND CRYPTO MODE</b>\n\n"
+        "Indices, stocks, and most commodities are closed.\n"
+        "Premium scanning remains active for crypto only.",
+        pin=True,
+        chat_id=PREMIUM_CHANNEL_ID,
+    )
+    send_telegram(fmt_watchlist("asian", crypto_pairs), chat_id=PREMIUM_CHANNEL_ID)
+
 def _weekend_scan_pairs(now, sess: str):
     day = now.weekday()
     if day == 5:
@@ -358,12 +371,14 @@ def scan_markets():
         _send_session_broadcasts(sess)
         last_session_alerted = sess
 
+    if weekend_crypto_only and last_session_alerted != "weekend":
+        _send_premium_weekend_broadcasts()
+        last_session_alerted = "weekend"
+
     # -- Weekend Logic --
     # Friday Close (21:00 UTC) - free forex pauses, premium crypto can still run
     if day == 4 and now.hour >= 21:
-        if last_session_alerted != "weekend":
-            send_telegram(fmt_weekend_close(), pin=True)
-            last_session_alerted = "weekend"
+        send_telegram(fmt_weekend_close(), pin=True)
         if not (PREMIUM_ENABLED and premium_crypto_pairs()):
             print("[MARKET] Weekend close reached. Scanning paused.")
             return
