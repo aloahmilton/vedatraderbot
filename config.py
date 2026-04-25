@@ -110,6 +110,9 @@ ALL_PREMIUM_PAIRS  = (
     PREMIUM_COMMODITIES
 )
 
+# Set of all forex pair names for easy identification
+FOREX_PAIRS = {p["name"] for p in (FREE_FOREX_PAIRS + PREMIUM_FOREX_PAIRS)}
+
 # Session-specific pair filtering
 SESSION_PAIRS = {
     "asian":   ["USD/JPY", "AUD/USD", "NZD/USD", "EUR/JPY", "GBP/JPY",

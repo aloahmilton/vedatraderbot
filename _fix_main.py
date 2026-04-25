@@ -1,3 +1,6 @@
+import os
+
+content = r'''
 """
 VEDA TRADER - main.py
 Signal Bot + Web Dashboard + AI Admin
@@ -624,3 +627,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+'''.strip()
+
+with open('main.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('main.py written successfully')

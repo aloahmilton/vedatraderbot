@@ -6,7 +6,7 @@ Telegram message formatting and delivery.
 import os
 import requests
 from datetime import datetime, timezone
-from src.config import (
+from config import (
     TELEGRAM_TOKEN, FREE_CHANNEL_ID, PREMIUM_CHANNEL_ID,
     ADMIN_CHAT_ID, SESSIONS, session_label
 )
@@ -221,7 +221,7 @@ def fmt_admin_summary(stats: dict, ai_note: str = "") -> str:
 # ── Bot Commands Handler ─────────────────────────────────────
 
 def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
-    from src.database import (
+    from database import (
         add_subscriber, upgrade_subscriber, downgrade_subscriber,
         remove_subscriber, get_all_subscribers, get_subscriber, get_daily_stats
     )
@@ -269,7 +269,7 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
         return
 
     if cmd == "/status":
-        from src.database import get_db
+        from database import get_db
         db = get_db()
         status = db["bot_status"].find_one({"_id": "latest"}) if db else {}
         send_fn(
@@ -282,7 +282,7 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
         return
 
     if cmd == "/signals":
-        from src.database import get_db
+        from database import get_db
         db = get_db()
         if db:
             recent = list(db["signals"].find({"tier": "public"}).sort("timestamp", -1).limit(5))
