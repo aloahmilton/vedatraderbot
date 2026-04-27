@@ -1,6 +1,6 @@
 """
 VEDA TRADER - ai_admin.py
-AI-powered admin assistant using Claude API.
+AI-powered admin assistant using Google AI.
 - Sends daily summaries to admin
 - Suggests when to pause/resume signals
 - Auto-replies to subscriber questions in channel
@@ -11,8 +11,8 @@ import os
 import requests
 from datetime import datetime, timezone
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL      = "claude-sonnet-4-20250514"
+GOOGLE_AI_STUDIO_KEY = os.getenv("GOOGLE_AI_STUDIO_KEY", "")
+GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemini-1.5-pro")
 
 SYSTEM_PROMPT = """You are the AI assistant for Veda Trader, a professional Telegram trading signal service.
 
@@ -26,36 +26,36 @@ Always be honest. Never promise guaranteed profits.
 Keep replies SHORT (under 150 words unless asked for more)."""
 
 
-def ask_claude(user_message: str, context: str = "") -> str:
-    if not ANTHROPIC_API_KEY:
-        return "AI not configured. Set ANTHROPIC_API_KEY in .env"
-    
+def ask_google_ai(user_message: str, context: str = "") -> str:
+    url = f"https://us-studio.googleapis.com/v1beta2/models/{GOOGLE_AI_MODEL}:generateMessage?key={GOOGLE_AI_STUDIO_KEY}"
     messages = []
     if context:
-        messages.append({"role": "user", "content": f"Context:\n{context}"})
-        messages.append({"role": "assistant", "content": "Got it. I have the context."})
-    messages.append({"role": "user", "content": user_message})
-
+        messages.append({"author": "system", "content": [{"type": "text", "text": context}]})
+    messages.append({"author": "user", "content": [{"type": "text", "text": user_message}]})
     try:
         r = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
+            url,
             json={
-                "model": CLAUDE_MODEL,
-                "max_tokens": 400,
-                "system": SYSTEM_PROMPT,
                 "messages": messages,
+                "temperature": 0.2,
+                "maxOutputTokens": 400,
             },
             timeout=30,
         )
         data = r.json()
-        return data["content"][0]["text"].strip()
+        candidates = data.get("candidates", [])
+        if candidates:
+            content = candidates[0].get("content", [])
+            return "".join(item.get("text", "") for item in content if item.get("type") == "text").strip()
+        return f"AI error: invalid Google AI response {data}"
     except Exception as e:
         return f"AI error: {e}"
+
+
+def ask_ai(user_message: str, context: str = "") -> str:
+    if GOOGLE_AI_STUDIO_KEY:
+        return ask_google_ai(user_message, context=context)
+    return "AI not configured. Set GOOGLE_AI_STUDIO_KEY in .env"
 
 
 # ── Admin Daily Summary ──────────────────────────────────────
@@ -76,7 +76,7 @@ Today's Veda Trader stats:
         "Note anything concerning. Suggest whether I should keep signals running or pause. "
         "End with one action I should take."
     )
-    return ask_claude(prompt, context=context)
+    return ask_ai(prompt, context=context)
 
 
 # ── Signal Pause Advisor ─────────────────────────────────────
@@ -98,9 +98,9 @@ def should_pause_signals(stats: dict, recent_results: list) -> tuple[bool, str]:
         reason = f"{sl_hits} consecutive SL hits detected. Pausing signals."
         return True, reason
 
-    # Ask Claude for nuanced advice
+    # Ask Google AI for nuanced advice
     context = f"Win rate: {winrate}%, SL hits: {sl_hits}, Total signals: {total}, Recent: {recent_results}"
-    advice  = ask_claude(
+    advice  = ask_ai(
         "Should I pause signals now? Reply with: PAUSE or CONTINUE, then one sentence reason.",
         context=context
     )
@@ -119,7 +119,7 @@ Current Veda Trader stats:
 - Free subs: {stats.get('free_subs', 0)}
 - Premium subs: {stats.get('premium_subs', 0)}
 """
-    return ask_claude(
+    return ask_ai(
         f"Subscriber @{username} asks: \"{question}\"\n\n"
         "Reply professionally on behalf of Veda Trader. Keep it under 100 words.",
         context=context
@@ -148,7 +148,7 @@ COMMON_QUESTIONS = {
 def auto_reply(message_text: str, username: str, stats: dict) -> str | None:
     """
     Returns a reply string or None if we shouldn't reply.
-    Tries keyword match first, then falls back to Claude.
+    Tries keyword match first, then falls back to Google AI.
     """
     lower = message_text.lower()
 
@@ -159,7 +159,7 @@ def auto_reply(message_text: str, username: str, stats: dict) -> str | None:
             # Dynamic reply needed
             return answer_subscriber_question(message_text, username, stats)
 
-    # General trading question — let Claude handle it
+    # General trading question — let Google AI handle it
     trading_keywords = [
         "signal", "trade", "buy", "sell", "profit", "loss", "pip", "spread",
         "when", "pair", "session", "crypto", "gold", "forex", "premium",

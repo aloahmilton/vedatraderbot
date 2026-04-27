@@ -184,14 +184,18 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
     if bb_pos == "below_lower": buy_signals += 1
     if bb_pos == "above_upper": sell_signals += 1
 
+    score_buy = score_signal(rsi_now, macd_hist_now, ema_cross, bb_pos, "BUY")
+    score_sell = score_signal(rsi_now, macd_hist_now, ema_cross, bb_pos, "SELL")
+
     if buy_signals > sell_signals:
         direction = "BUY"
+        score = score_buy
     elif sell_signals > buy_signals:
         direction = "SELL"
+        score = score_sell
     else:
-        return None  # No clear direction
-
-    score = score_signal(rsi_now, macd_hist_now, ema_cross, bb_pos, direction)
+        direction = "BUY" if score_buy >= score_sell else "SELL"
+        score = score_buy if direction == "BUY" else score_sell
 
     # Minimum score threshold
     min_score = 65 if tier == "public" else 70
@@ -245,11 +249,12 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
 
 # ── Pending Signal Evaluator ─────────────────────────────────
 
-def evaluate_pending_signals(session_signals: list) -> None:
+def evaluate_pending_signals(session_signals: list) -> list:
     """
     Check open signals - mark TP/SL hit if price crossed target.
-    Updates signal dict in-place with 'result'.
+    Returns the list of newly closed signals.
     """
+    closed_signals = []
     for sig in session_signals:
         if sig.get("result"):  # already closed
             continue
@@ -268,6 +273,9 @@ def evaluate_pending_signals(session_signals: list) -> None:
                     sig["result"] = "✅ TP HIT"
                 elif current_price >= sig["sl"]:
                     sig["result"] = "❌ SL HIT"
+            if sig.get("result"):
+                closed_signals.append(sig)
             time.sleep(0.3)
         except Exception as e:
             print(f"[EVAL] {sig.get('pair','?')}: {e}")
+    return closed_signals

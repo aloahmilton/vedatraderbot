@@ -11,7 +11,7 @@ veda_trader/
     ├── engine.py        ← Real signal logic (RSI, EMA, MACD)
     ├── notifier.py      ← Telegram messages
     ├── database.py      ← MongoDB helpers
-    └── ai_admin.py      ← AI assistant (Claude-powered)
+    └── ai_admin.py      ← AI assistant (Google AI-powered)
 ```
 
 ---
@@ -49,11 +49,11 @@ pip install -r requirements.txt
 
 ---
 
-## Step 4 — Get your Anthropic API Key (for AI admin)
+## Step 4 — Get your Google AI Studio Key (for AI admin)
 
-1. Go to [console.anthropic.com](https://console.anthropic.com)
-2. Create an API key
-3. Add it to your .env as `ANTHROPIC_API_KEY`
+1. Go to [cloud.google.com/ai/studio](https://cloud.google.com/ai/studio)
+2. Create or copy your API key
+3. Add it to your .env as `GOOGLE_AI_STUDIO_KEY`
 
 ---
 

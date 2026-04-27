@@ -5,7 +5,7 @@ Run: python main.py
 """
 
 import os, time, threading, schedule, logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,15 +27,16 @@ from config import (
 from engine import analyze_pair, evaluate_pending_signals
 from notifier import (
     send_telegram, send_admin,
-    fmt_signal, fmt_session_announcement, fmt_session_close,
-    fmt_watchlist, fmt_session_report, fmt_weekend_close,
-    fmt_weekend_open, fmt_broker_reminder, fmt_admin_summary,
+    fmt_signal, fmt_activity_result, fmt_session_announcement,
+    fmt_session_close, fmt_watchlist, fmt_session_report,
+    fmt_daily_report, fmt_weekend_close, fmt_weekend_open,
+    fmt_broker_reminder, fmt_admin_summary,
     handle_telegram_command, setup_bot_profile
 )
 from database import (
     get_db, init_db, save_signal_to_db, record_signal_state,
     upsert_bot_status, log_scan_error, get_daily_stats,
-    get_all_subscribers
+    get_daily_stats_for_date, get_all_subscribers
 )
 from ai_admin import (
     generate_admin_summary, should_pause_signals, auto_reply
@@ -50,6 +51,7 @@ last_update_id:       int  = 0
 signals_paused:       bool = False
 last_summary_hour:    int  = -1
 last_broker_reminder: str  = ""
+last_daily_report_date: str = ""
 
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -398,6 +400,24 @@ def _store_signal(sig: dict, delivery: dict):
     record_signal_state(sig["pair"], sig["type"])
 
 
+def _send_trade_result(sig: dict):
+    msg = fmt_activity_result(sig)
+    send_telegram(msg, chat_id=FREE_CHANNEL_ID)
+    if PREMIUM_CHANNEL_ID and sig.get("tier") == "premium":
+        send_telegram(msg, chat_id=PREMIUM_CHANNEL_ID)
+    send_admin(msg)
+
+
+def _send_daily_report(report_date):
+    stats = get_daily_stats_for_date(report_date)
+    date_str = report_date.strftime("%d %b %Y")
+    msg = fmt_daily_report(stats, date_str)
+    send_admin(msg)
+    send_telegram(msg, chat_id=FREE_CHANNEL_ID)
+    if PREMIUM_CHANNEL_ID:
+        send_telegram(msg, chat_id=PREMIUM_CHANNEL_ID)
+
+
 # -- Session Management --------------------------------------
 
 def _handle_session_change(sess: str):
@@ -438,7 +458,7 @@ def _handle_session_change(sess: str):
 # -- Main Scanner --------------------------------------------
 
 def scan_markets():
-    global session_signals, last_session_alerted, last_summary_hour, signals_paused
+    global session_signals, last_session_alerted, last_summary_hour, signals_paused, last_daily_report_date
 
     if signals_paused:
         print("[BOT] Paused - skipping scan.")
@@ -451,7 +471,11 @@ def scan_markets():
     weekend = is_weekend()
 
     try:
-        evaluate_pending_signals(session_signals)
+        closed_signals = evaluate_pending_signals(session_signals)
+        for sig in closed_signals:
+            if not sig.get("result_notified"):
+                _send_trade_result(sig)
+                sig["result_notified"] = True
     except Exception as e:
         log_scan_error("evaluate_pending_signals", str(e))
 
@@ -490,6 +514,14 @@ def scan_markets():
             if now.hour % 4 == 0 and now.minute < 5:
                 summary = generate_admin_summary(stats)
                 send_admin(f"Hourly Summary\n\n{summary}")
+
+    if now.date().isoformat() != last_daily_report_date:
+        if now.hour == 23 and now.minute >= 55:
+            _send_daily_report(now.date())
+            last_daily_report_date = now.date().isoformat()
+        elif now.hour == 0 and now.minute < 5:
+            _send_daily_report(now.date() - timedelta(days=1))
+            last_daily_report_date = now.date().isoformat()
 
     scanned = generated = sent_ok = sent_fail = premium_ok = premium_fail = 0
 

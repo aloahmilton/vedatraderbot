@@ -4,7 +4,7 @@ MongoDB connection and helpers.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
@@ -152,7 +152,6 @@ def get_daily_stats() -> dict:
     db = get_db()
     if db is None:
         return {}
-    from datetime import timedelta
     since = datetime.now(timezone.utc) - timedelta(hours=24)
     signals = list(db["signals"].find({"timestamp": {"$gte": since}}))
     tp_hits = sum(1 for s in signals if s.get("result") == "✅ TP HIT")
@@ -166,4 +165,26 @@ def get_daily_stats() -> dict:
         "winrate": winrate,
         "free_subs": len(get_all_subscribers("free")),
         "premium_subs": len(get_all_subscribers("premium")),
+    }
+
+def get_daily_stats_for_date(date) -> dict:
+    db = get_db()
+    if db is None:
+        return {}
+    start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    signals = list(db["signals"].find({"timestamp": {"$gte": start, "$lt": end}}))
+    tp_hits = sum(1 for s in signals if s.get("result") == "✅ TP HIT")
+    sl_hits = sum(1 for s in signals if s.get("result") == "❌ SL HIT")
+    pending = sum(1 for s in signals if not s.get("result"))
+    total = len(signals)
+    winrate = round((tp_hits / total * 100), 1) if total else 0
+    lossrate = round((sl_hits / total * 100), 1) if total else 0
+    return {
+        "total": total,
+        "tp_hits": tp_hits,
+        "sl_hits": sl_hits,
+        "pending": pending,
+        "winrate": winrate,
+        "lossrate": lossrate,
     }

@@ -125,6 +125,28 @@ def fmt_session_close(sess: str) -> str:
         f"━━━━━━━━━━━━━━━━━━━━━"
     )
 
+def fmt_activity_result(sig: dict) -> str:
+    result = sig.get("result", "")
+    if "TP HIT" in result:
+        header = "✅✅✅ <b>GAIN</b>"
+    elif "SL HIT" in result:
+        header = "❌❌❌ <b>LOSS</b>"
+    else:
+        header = "📌 <b>TRADE UPDATE</b>"
+
+    return (
+        f"{LOGO}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{header}\n\n"
+        f"{sig['pair']} — {sig['type']}\n"
+        f"Entry: <code>{sig['price']}</code>\n"
+        f"TP: <code>{sig['tp']}</code>  |  SL: <code>{sig['sl']}</code>\n"
+        f"Result: {result}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚠️ <i>Not financial advice.</i>"
+    )
+
+
 def fmt_session_report(signals: list, date_str: str) -> str:
     if not signals:
         return f"{LOGO}\n📊 <b>SESSION REPORT — {date_str}</b>\n\nNo signals this session."
@@ -134,16 +156,17 @@ def fmt_session_report(signals: list, date_str: str) -> str:
     pending = sum(1 for s in signals if not s.get("result"))
     total   = len(signals)
     winrate = round(tp_hits / total * 100) if total else 0
+    lossrate = round(sl_hits / total * 100) if total else 0
 
     lines = [
         f"{LOGO}",
         f"━━━━━━━━━━━━━━━━━━━━━",
         f"📊 <b>SESSION REPORT — {date_str}</b>\n",
         f"📤 Signals sent:  {total}",
-        f"✅ TP Hit:        {tp_hits}",
-        f"❌ SL Hit:        {sl_hits}",
+        f"✅ Wins:          {tp_hits} ({winrate}%)",
+        f"❌ Losses:        {sl_hits} ({lossrate}%)",
         f"⏳ Still open:   {pending}",
-        f"🎯 Win Rate:      {winrate}%\n",
+        f"━━━━━━━━━━━━━━━━━━━━━",
     ]
 
     for s in signals[-5:]:  # last 5 signals summary
@@ -153,6 +176,28 @@ def fmt_session_report(signals: list, date_str: str) -> str:
     lines.append("━━━━━━━━━━━━━━━━━━━━━")
     lines.append("⚠️ <i>Past results do not guarantee future performance.</i>")
     return "\n".join(lines)
+
+
+def fmt_daily_report(stats: dict, date_str: str) -> str:
+    total = stats.get("total", 0)
+    tp_hits = stats.get("tp_hits", 0)
+    sl_hits = stats.get("sl_hits", 0)
+    winrate = stats.get("winrate", 0)
+    lossrate = stats.get("lossrate", 0)
+    pending = stats.get("pending", 0)
+
+    return (
+        f"{LOGO}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 <b>DAILY RESULTS — {date_str}</b>\n\n"
+        f"📤 Signals sent:  {total}\n"
+        f"✅ Wins:          {tp_hits} ({winrate}%)\n"
+        f"❌ Losses:        {sl_hits} ({lossrate}%)\n"
+        f"⏳ Still open:   {pending}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚠️ <i>Past results do not guarantee future performance.</i>"
+    )
+
 
 def fmt_watchlist(sess: str, pairs: list) -> str:
     label = session_label(sess)
@@ -251,6 +296,21 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
             f"/signals — view recent signals\n"
             f"/status — bot status\n"
             f"/premium — learn about premium",
+            chat_id=chat_id
+        )
+        return
+
+    if cmd == "/help":
+        send_fn(
+            f"{LOGO}\n\n"
+            f"📖 <b>Available Commands</b>\n\n"
+            f"/start — Register & get started\n"
+            f"/signals — View recent signals\n"
+            f"/status — Bot status & stats\n"
+            f"/premium — Learn about premium\n"
+            f"/help — Show this help message\n\n"
+            f"💎 Premium members get indices, crypto & gold signals.\n"
+            f"Contact @VedaTraderAdmin to upgrade.",
             chat_id=chat_id
         )
         return
@@ -357,13 +417,85 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
 # ── Bot Profile Setup ────────────────────────────────────────
 
 def setup_bot_profile():
+    """Configure bot name, description, and all commands via Telegram Bot API."""
+    if not TELEGRAM_TOKEN:
+        print("[BOT SETUP] No TELEGRAM_BOT_TOKEN — skipping profile setup")
+        return
+
     try:
-        requests.post(f"{BASE_URL}/setMyCommands", json={"commands": [
-            {"command": "start",       "description": "Register & get started"},
-            {"command": "signals",     "description": "View recent signals"},
-            {"command": "status",      "description": "Bot status"},
-            {"command": "premium",     "description": "Learn about premium"},
-        ]}, timeout=5)
-        print("[BOT] Commands set ✓")
+        # 1. Set bot name
+        r = requests.post(f"{BASE_URL}/setMyName", json={
+            "name": "⚡ Veda Trader Signals"
+        }, timeout=5)
+        if r.json().get("ok"):
+            print("[BOT] Name set ✓")
+        else:
+            print(f"[BOT] Name error: {r.json().get('description')}")
+
+        # 2. Set short description (shown in chat list / search)
+        r = requests.post(f"{BASE_URL}/setMyShortDescription", json={
+            "short_description": "Free Forex + Premium Indices, Crypto & Gold signals"
+        }, timeout=5)
+        if r.json().get("ok"):
+            print("[BOT] Short description set ✓")
+        else:
+            print(f"[BOT] Short desc error: {r.json().get('description')}")
+
+        # 3. Set full description (shown in bot profile)
+        r = requests.post(f"{BASE_URL}/setMyDescription", json={
+            "description": (
+                "⚡ VEDA TRADER — Professional Trading Signal Bot\n\n"
+                "🔓 FREE: Forex scalping signals during market sessions\n"
+                "💎 PREMIUM: Indices, Crypto, Gold + Forex swing signals\n"
+                "📊 AI-powered analysis with RSI, EMA, MACD & ATR\n"
+                "🕐 Active: Asian (00-08 UTC) | London (08-16 UTC) | NY (13-22 UTC)\n\n"
+                "Use /start to register and /help to see all commands."
+            )
+        }, timeout=5)
+        if r.json().get("ok"):
+            print("[BOT] Description set ✓")
+        else:
+            print(f"[BOT] Description error: {r.json().get('description')}")
+
+        # 4. Set public commands (visible to all users)
+        r = requests.post(f"{BASE_URL}/setMyCommands", json={
+            "commands": [
+                {"command": "start",   "description": "Register & get started"},
+                {"command": "signals", "description": "View recent signals"},
+                {"command": "status",  "description": "Bot status & stats"},
+                {"command": "premium", "description": "Learn about premium"},
+                {"command": "help",    "description": "Show help & commands"},
+            ]
+        }, timeout=5)
+        if r.json().get("ok"):
+            print("[BOT] Public commands set ✓")
+        else:
+            print(f"[BOT] Public cmds error: {r.json().get('description')}")
+
+        # 5. Set admin-only commands (scoped to admin chat)
+        if ADMIN_CHAT_ID:
+            r = requests.post(f"{BASE_URL}/setMyCommands", json={
+                "commands": [
+                    {"command": "start",        "description": "Register & get started"},
+                    {"command": "signals",      "description": "View recent signals"},
+                    {"command": "status",       "description": "Bot status & stats"},
+                    {"command": "premium",      "description": "Learn about premium"},
+                    {"command": "help",         "description": "Show help & commands"},
+                    {"command": "grant",        "description": "Grant premium to user (admin)"},
+                    {"command": "revoke",       "description": "Revoke premium from user (admin)"},
+                    {"command": "kick",         "description": "Remove subscriber (admin)"},
+                    {"command": "subscribers",  "description": "List all subscribers (admin)"},
+                    {"command": "summary",      "description": "Daily performance summary (admin)"},
+                    {"command": "broadcast",    "description": "Broadcast message (admin)"},
+                    {"command": "pause",        "description": "Pause all signals (admin)"},
+                    {"command": "resume",       "description": "Resume signals (admin)"},
+                ],
+                "scope": {"type": "chat", "chat_id": ADMIN_CHAT_ID}
+            }, timeout=5)
+            if r.json().get("ok"):
+                print("[BOT] Admin commands set ✓")
+            else:
+                print(f"[BOT] Admin cmds error: {r.json().get('description')}")
+
     except Exception as e:
         print(f"[BOT SETUP ERROR] {e}")

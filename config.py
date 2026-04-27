@@ -9,18 +9,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _env_value(key: str, default: str = "") -> str:
+    value = os.getenv(key, default)
+    if isinstance(value, str) and "#" in value:
+        value = value.split("#", 1)[0].strip()
+    return value
+
 # ── Telegram ────────────────────────────────────────────────
-TELEGRAM_TOKEN          = os.getenv("TELEGRAM_BOT_TOKEN", "")
-FREE_CHANNEL_ID         = os.getenv("FREE_TELEGRAM_CHANNEL_ID", "")
-PREMIUM_CHANNEL_ID      = os.getenv("PREMIUM_TELEGRAM_CHANNEL_ID", "")
-ADMIN_CHAT_ID           = os.getenv("ADMIN_CHAT_ID", "")          # your personal Telegram ID
+TELEGRAM_TOKEN          = _env_value("TELEGRAM_BOT_TOKEN", "")
+FREE_CHANNEL_ID         = _env_value("FREE_TELEGRAM_CHANNEL_ID", "")
+PREMIUM_CHANNEL_ID      = _env_value("PREMIUM_TELEGRAM_CHANNEL_ID", "")
+ADMIN_CHAT_ID           = _env_value("ADMIN_CHAT_ID", "")          # your personal Telegram ID
 
 # ── App ─────────────────────────────────────────────────────
-SECRET_KEY      = os.getenv("SECRET_KEY", "veda-secret-2026")
-MONGO_URI       = os.getenv("MONGO_URI", "")
-AFFILIATE_LINK  = os.getenv("AFFILIATE_LINK", "#")
-ADMIN_USERNAME  = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD  = os.getenv("ADMIN_PASSWORD", "VedaGold2026!")
+SECRET_KEY      = _env_value("SECRET_KEY", "veda-secret-2026")
+MONGO_URI       = _env_value("MONGO_URI", "")
+AFFILIATE_LINK  = _env_value("AFFILIATE_LINK", "#")
+ADMIN_USERNAME  = _env_value("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD  = _env_value("ADMIN_PASSWORD", "VedaGold2026!")
 
 # ── Sessions (UTC hours) ────────────────────────────────────
 SESSIONS = {
@@ -149,4 +155,5 @@ def validate_runtime_config() -> list:
     if not PREMIUM_CHANNEL_ID:issues.append("⚠ PREMIUM_TELEGRAM_CHANNEL_ID not set")
     if not MONGO_URI:         issues.append("⚠ MONGO_URI not set")
     if not ADMIN_CHAT_ID:     issues.append("⚠ ADMIN_CHAT_ID not set (AI summaries disabled)")
+    if not os.getenv("GOOGLE_AI_STUDIO_KEY",""): issues.append("⚠ GOOGLE_AI_STUDIO_KEY not set (AI summaries disabled)")
     return issues
