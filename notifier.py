@@ -53,7 +53,7 @@ def send_admin(text: str) -> bool:
 # ── Signal Formatters ────────────────────────────────────────
 
 def fmt_signal(sig: dict) -> str:
-    arrow   = "📈" if sig["type"] == "BUY" else "📉"
+    arrow   = "🟢" if sig["type"] == "BUY" else "🔴"
     tier_lbl = "🔓 FREE SIGNAL" if sig["tier"] == "public" else "💎 PREMIUM SIGNAL"
     now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
@@ -73,7 +73,7 @@ def fmt_signal(sig: dict) -> str:
     )
 
 def fmt_gold_signal(sig: dict) -> str:
-    arrow = "📈" if sig["type"] == "BUY" else "📉"
+    arrow = "🟢" if sig["type"] == "BUY" else "🔴"
     now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
     return (
         f"{LOGO}\n"

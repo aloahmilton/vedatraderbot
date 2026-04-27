@@ -208,7 +208,7 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
     if tier == "public":  # scalping
         sl_pips = round(atr_val / pip * 0.8, 1)
         tp_pips = round(sl_pips * 1.2, 1)   # 1:1.2 RR for scalping
-        duration = "3-5 mins"
+        duration = "5 mins"
     else:  # premium swing
         sl_pips = round(atr_val / pip * 1.2, 1)
         tp_pips = round(sl_pips * 2.0, 1)   # 1:2 RR for swing
@@ -222,9 +222,9 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
         tp_price = round(price - (tp_pips * pip), 5)
 
     # ── Quality label ──
-    if score >= 85:   quality = "🔥 STRONG"
-    elif score >= 75: quality = "✅ GOOD"
-    else:             quality = "⚡ MODERATE"
+    if score >= 85:   quality = "⭐⭐⭐⭐⭐"
+    elif score >= 75: quality = "⭐⭐⭐⭐"
+    else:             quality = "⭐⭐⭐"
 
     return {
         "pair":      pair["name"],
