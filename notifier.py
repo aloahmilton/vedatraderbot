@@ -265,10 +265,12 @@ def fmt_admin_summary(stats: dict, ai_note: str = "") -> str:
 
 # ── Bot Commands Handler ─────────────────────────────────────
 
-def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
+def handle_telegram_command(update: dict, send_fn, premium_enabled: bool,
+                            pause_callback=None, resume_callback=None):
     from database import (
         add_subscriber, upgrade_subscriber, downgrade_subscriber,
-        remove_subscriber, get_all_subscribers, get_subscriber, get_daily_stats
+        remove_subscriber, get_all_subscribers, get_subscriber, get_daily_stats,
+        get_db
     )
 
     msg = update.get("message", {})
@@ -300,19 +302,37 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
         )
         return
 
-    if cmd == "/help":
-        send_fn(
+    if cmd == "/help" or cmd == "/commands":
+        help_text = (
             f"{LOGO}\n\n"
             f"📖 <b>Available Commands</b>\n\n"
             f"/start — Register & get started\n"
             f"/signals — View recent signals\n"
             f"/status — Bot status & stats\n"
+            f"/daily — Today\'s performance\n"
+            f"/results — Recent signal results\n"
+            f"/lastsignal — Latest signal details\n"
+            f"/session — Session summary\n"
+            f"/gale — Gale backup plan\n"
             f"/premium — Learn about premium\n"
-            f"/help — Show this help message\n\n"
+            f"/help — Show this help message\n"
+            f"/commands — View available commands\n\n"
             f"💎 Premium members get indices, crypto & gold signals.\n"
-            f"Contact @VedaTraderAdmin to upgrade.",
-            chat_id=chat_id
+            f"Contact @VedaTraderAdmin to upgrade."
         )
+        if is_admin:
+            help_text += (
+                f"\n\n🔒 <b>Admin Commands</b>\n"
+                f"/grant @user — Grant premium to user\n"
+                f"/revoke @user — Revoke premium from user\n"
+                f"/kick @user — Remove subscriber\n"
+                f"/subscribers — List all subscribers\n"
+                f"/summary — Daily admin summary\n"
+                f"/broadcast — Broadcast a message\n"
+                f"/pause — Pause all signals\n"
+                f"/resume — Resume signals"
+            )
+        send_fn(help_text, chat_id=chat_id)
         return
 
     if cmd == "/premium":
@@ -328,15 +348,86 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
         )
         return
 
+    if cmd == "/daily":
+        stats = get_daily_stats()
+        send_fn(fmt_daily_report(stats, datetime.now(timezone.utc).strftime("%d %b %Y")), chat_id=chat_id)
+        return
+
+    if cmd == "/results":
+        db = get_db()
+        if db:
+            recent = list(db["signals"].find().sort("timestamp", -1).limit(8))
+            if recent:
+                lines = [f"{LOGO}\n📋 <b>Recent Results</b>\n"]
+                for s in recent:
+                    result = s.get("result", "⏳ Open")
+                    lines.append(f"• {s['pair']} {s['type']} → {result}")
+                send_fn("\n".join(lines), chat_id=chat_id)
+            else:
+                send_fn("No signal results available yet.", chat_id=chat_id)
+        else:
+            send_fn("Database unavailable.", chat_id=chat_id)
+        return
+
+    if cmd == "/lastsignal":
+        db = get_db()
+        if db:
+            last = db["signals"].find().sort("timestamp", -1).limit(1)
+            if last:
+                s = list(last)[0]
+                send_fn(
+                    f"{LOGO}\n\n"
+                    f"📌 <b>Last Signal</b>\n"
+                    f"{s['pair']} — {s['type']}\n"
+                    f"Entry: {s.get('price')}\n"
+                    f"TP: {s.get('tp')} | SL: {s.get('sl')}\n"
+                    f"Result: {s.get('result', '⏳ Open')}",
+                    chat_id=chat_id
+                )
+            else:
+                send_fn("No signals found.", chat_id=chat_id)
+        else:
+            send_fn("Database unavailable.", chat_id=chat_id)
+        return
+
+    if cmd == "/session":
+        stats = get_daily_stats()
+        send_fn(
+            f"{LOGO}\n\n"
+            f"📊 <b>Session Summary</b>\n"
+            f"Signals today: {stats.get('total', 0)}\n"
+            f"✅ Wins: {stats.get('tp_hits', 0)}\n"
+            f"❌ Losses: {stats.get('sl_hits', 0)}\n"
+            f"🎯 Win rate: {stats.get('winrate', 0)}%\n"
+            f"🧾 Free subs: {stats.get('free_subs', 0)}\n"
+            f"💎 Premium subs: {stats.get('premium_subs', 0)}",
+            chat_id=chat_id
+        )
+        return
+
+    if cmd == "/gale":
+        send_fn(
+            f"{LOGO}\n\n"
+            f"🌀 <b>Gale Backups</b>\n"
+            f"Main signal uses a 5-minute trade window.\n"
+            f"If the trade misses, a follow-up gale entry can be used 5 minutes later.\n"
+            f"If the first gale misses, a second gale may follow after another 5 minutes.\n"
+            f"When a signal closes with gain or loss, the next trade analysis starts after the result.",
+            chat_id=chat_id
+        )
+        return
+
     if cmd == "/status":
         from database import get_db
         db = get_db()
         status = db["bot_status"].find_one({"_id": "latest"}) if db else {}
+        paused = status.get("paused", False)
         send_fn(
             f"🤖 <b>Bot Status</b>\n\n"
-            f"✅ Online\n"
+            f"{('⏸️ Paused' if paused else '✅ Online')}\n"
             f"📊 Last scan: {status.get('session','—').title()} session\n"
-            f"📤 Signals today: {status.get('signals_generated', 0)}",
+            f"📤 Signals today: {status.get('signals_generated', 0)}\n"
+            f"🧾 Use /daily or /results for more detail.",
             chat_id=chat_id
         )
         return
@@ -406,10 +497,14 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool):
         return
 
     if cmd == "/pause":
+        if pause_callback:
+            pause_callback(True)
         send_fn("⏸ Signaling paused. Use /resume to restart.", chat_id=chat_id)
         return
 
     if cmd == "/resume":
+        if resume_callback:
+            resume_callback(False)
         send_fn("▶️ Signaling resumed.", chat_id=chat_id)
         return
 
@@ -460,11 +555,16 @@ def setup_bot_profile():
         # 4. Set public commands (visible to all users)
         r = requests.post(f"{BASE_URL}/setMyCommands", json={
             "commands": [
-                {"command": "start",   "description": "Register & get started"},
-                {"command": "signals", "description": "View recent signals"},
-                {"command": "status",  "description": "Bot status & stats"},
-                {"command": "premium", "description": "Learn about premium"},
-                {"command": "help",    "description": "Show help & commands"},
+                {"command": "start",      "description": "Register & get started"},
+                {"command": "signals",    "description": "View recent signals"},
+                {"command": "status",     "description": "Bot status & stats"},
+                {"command": "daily",      "description": "Show today\'s performance"},
+                {"command": "results",    "description": "Show recent signal results"},
+                {"command": "lastsignal", "description": "Show the latest signal"},
+                {"command": "session",    "description": "Session summary"},
+                {"command": "gale",       "description": "Explain gale backup flow"},
+                {"command": "premium",    "description": "Learn about premium"},
+                {"command": "help",       "description": "Show help & commands"},
             ]
         }, timeout=5)
         if r.json().get("ok"):
@@ -481,6 +581,11 @@ def setup_bot_profile():
                     {"command": "status",       "description": "Bot status & stats"},
                     {"command": "premium",      "description": "Learn about premium"},
                     {"command": "help",         "description": "Show help & commands"},
+                    {"command": "daily",        "description": "Show today\'s performance"},
+                    {"command": "results",      "description": "Show recent signal results"},
+                    {"command": "lastsignal",   "description": "Show the latest signal"},
+                    {"command": "session",      "description": "Session summary"},
+                    {"command": "gale",         "description": "Explain gale backup flow"},
                     {"command": "grant",        "description": "Grant premium to user (admin)"},
                     {"command": "revoke",       "description": "Revoke premium from user (admin)"},
                     {"command": "kick",         "description": "Remove subscriber (admin)"},

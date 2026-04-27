@@ -575,12 +575,21 @@ def scan_markets():
         "signals_sent_fail": sent_fail,
         "premium_sent_ok":   premium_ok,
         "premium_sent_fail": premium_fail,
+        "paused":            signals_paused,
     })
 
     print(f"[SCAN] {now.strftime('%H:%M')} | {sess} | scanned={scanned} generated={generated} ok={sent_ok} fail={sent_fail}")
 
 
 # -- Command Polling -----------------------------------------
+
+def set_signals_paused(paused: bool):
+    global signals_paused
+    signals_paused = paused
+    print(f"[BOT] signals_paused set to {signals_paused}")
+    upsert_bot_status({"paused": signals_paused})
+    return signals_paused
+
 
 def poll_commands():
     global last_update_id
@@ -610,7 +619,13 @@ def poll_commands():
                             if reply and chat_id:
                                 send_telegram(reply, chat_id=chat_id)
                         else:
-                            handle_telegram_command(upd, send_telegram, bool(PREMIUM_CHANNEL_ID))
+                            handle_telegram_command(
+                                upd,
+                                send_telegram,
+                                bool(PREMIUM_CHANNEL_ID),
+                                pause_callback=set_signals_paused,
+                                resume_callback=set_signals_paused
+                            )
                     except Exception as e:
                         log_scan_error("telegram_command", str(e))
     except Exception as e:
