@@ -632,9 +632,26 @@ def poll_commands():
         print(f"[POLL ERROR] {e}")
 
 
-# -- Entry Point ---------------------------------------------
+# -- Robust Scanner with Auto-Restart ---------------------
 
-def main():
+MAX_RESTARTS = 10
+restart_count = 0
+last_scan_timestamp = None
+
+def run_scanner_with_guard():
+    """Run scan_markets with error handling and auto-restart capability."""
+    global restart_count, last_scan_timestamp
+    try:
+        scan_markets()
+        last_scan_timestamp = datetime.now(timezone.utc)
+    except Exception as e:
+        print(f"[SCAN ERROR] {e}")
+        log_scan_error("scanner", str(e))
+
+def robust_main():
+    """Main loop with automatic restart on failure."""
+    global restart_count
+    
     issues = validate_runtime_config()
     for issue in issues:
         print(f"[CONFIG] {issue}")
@@ -658,15 +675,61 @@ def main():
 
     setup_bot_profile()
 
+    # Initial scan
     scan_markets()
 
-    schedule.every(5).minutes.do(scan_markets)
+    # Schedule scans every 5 minutes
+    schedule.every(5).minutes.do(run_scanner_with_guard)
 
     print("[BOT] Running. Ctrl+C to stop.")
+    print("[BOT] Production mode: auto-restart enabled")
+    
     while True:
-        schedule.run_pending()
-        poll_commands()
-        time.sleep(2)
+        try:
+            schedule.run_pending()
+            poll_commands()
+            time.sleep(2)
+            
+            # Check if scanner is alive - restart if no scans for 15 minutes
+            if last_scan_timestamp:
+                time_since_scan = (datetime.now(timezone.utc) - last_scan_timestamp).total_seconds()
+                if time_since_scan > 900:  # 15 minutes
+                    print(f"[WARN] No scan for {int(time_since_scan)}s - restarting scanner")
+                    schedule.clear()
+                    schedule.every(5).minutes.do(run_scanner_with_guard)
+                    run_scanner_with_guard()
+                    last_scan_timestamp = datetime.now(timezone.utc)
+                    
+        except KeyboardInterrupt:
+            print("[BOT] Shutting down...")
+            break
+        except Exception as e:
+            print(f"[BOT ERROR] {e}")
+            restart_count += 1
+            if restart_count > MAX_RESTARTS:
+                print("[BOT] Max restarts reached, exiting...")
+                send_admin("⚠️ BOT CRASHED - Max restarts reached. Manual restart required!")
+                break
+            print(f"[BOT] Restarting... ({restart_count}/{MAX_RESTARTS})")
+            time.sleep(5)
+
+# Health check endpoint for production monitoring
+@app.route("/health")
+def health_check():
+    """Health check endpoint for Render/ deployment monitoring."""
+    status = {
+        "status": "ok",
+        "last_scan": last_scan_timestamp.isoformat() if last_scan_timestamp else None,
+        "restarts": restart_count,
+        "signals_paused": signals_paused
+    }
+    return jsonify(status)
+
+# -- Entry Point ---------------------------------------------
+
+def main():
+    """Wrapper - calls robust_main for production."""
+    robust_main()
 
 
 if __name__ == "__main__":

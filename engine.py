@@ -197,8 +197,8 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
         direction = "BUY" if score_buy >= score_sell else "SELL"
         score = score_buy if direction == "BUY" else score_sell
 
-    # Minimum score threshold
-    min_score = 65 if tier == "public" else 70
+# Minimum score threshold ( lowered for more signals)
+    min_score = 55 if tier == "public" else 60
     if score < min_score:
         return None
 
