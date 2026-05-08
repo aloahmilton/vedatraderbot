@@ -650,7 +650,7 @@ def run_scanner_with_guard():
 
 def robust_main():
     """Main loop with automatic restart on failure."""
-    global restart_count
+    global restart_count, last_scan_timestamp
     
     issues = validate_runtime_config()
     for issue in issues:
