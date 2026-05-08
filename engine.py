@@ -198,7 +198,7 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
         score = score_buy if direction == "BUY" else score_sell
 
 # Minimum score threshold ( lowered for more signals)
-    min_score = 55 if tier == "public" else 60
+    min_score = 50 if tier == "public" else 45
     if score < min_score:
         return None
 
@@ -210,9 +210,9 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
         tp_pips = round(sl_pips * 1.2, 1)   # 1:1.2 RR for scalping
         duration = "5 mins"
     else:  # premium swing
-        sl_pips = round(atr_val / pip * 1.2, 1)
-        tp_pips = round(sl_pips * 2.0, 1)   # 1:2 RR for swing
-        duration = "30-60 mins"
+        sl_pips = round(atr_val / pip * 2.0, 1)
+        tp_pips = round(sl_pips * 3.0, 1)   # 1:3 RR for swing
+        duration = "60-120 mins"
 
     if direction == "BUY":
         sl_price = round(price - (sl_pips * pip), 5)
@@ -261,7 +261,7 @@ def evaluate_pending_signals(session_signals: list) -> list:
         try:
             # Check expiry first
             entry_time = sig["timestamp"]
-            duration_min = 5 if sig["tier"] == "public" else 60  # 5 min for free, 60 for premium
+            duration_min = 5 if sig["tier"] == "public" else 120  # 5 min for free, 120 for premium
             if datetime.now(timezone.utc) > entry_time + timedelta(minutes=duration_min):
                 sig["result"] = "⏰ EXPIRED"
                 closed_signals.append(sig)

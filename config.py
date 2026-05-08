@@ -108,12 +108,20 @@ PREMIUM_COMMODITIES = [
     {"name": "OIL",     "symbol": "CL=F",   "pip": 0.01, "tier": "premium"},
 ]
 
+PREMIUM_STOCKS = [
+    {"name": "AAPL",    "symbol": "AAPL",   "pip": 0.01, "tier": "premium"},
+    {"name": "TSLA",    "symbol": "TSLA",   "pip": 0.01, "tier": "premium"},
+    {"name": "GOOGL",   "symbol": "GOOGL",  "pip": 0.01, "tier": "premium"},
+    {"name": "MSFT",    "symbol": "MSFT",   "pip": 0.01, "tier": "premium"},
+]
+
 ALL_FREE_PAIRS     = FREE_FOREX_PAIRS
 ALL_PREMIUM_PAIRS  = (
     PREMIUM_FOREX_PAIRS +
     PREMIUM_INDICES +
     PREMIUM_CRYPTO +
-    PREMIUM_COMMODITIES
+    PREMIUM_COMMODITIES +
+    PREMIUM_STOCKS
 )
 
 # Set of all forex pair names for easy identification
