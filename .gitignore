@@ -58,3 +58,4 @@ logs/
 # Environment variables
 .env.local
 .env.production
+.env

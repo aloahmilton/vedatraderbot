@@ -37,8 +37,14 @@ def ping_app():
 def main():
     # Check for aggressive mode
     aggressive = "--every-second" in sys.argv
+    single = "--single" in sys.argv
     
-    if aggressive:
+    if single:
+        print(f"[KEEP ALIVE] Single ping mode")
+        print(f"[KEEP ALIVE] Target: {RENDER_URL}")
+        ping_app()
+        return
+    elif aggressive:
         print(f"[KEEP ALIVE] Aggressive mode - pinging EVERY SECOND")
         print(f"[KEEP ALIVE] Target: {RENDER_URL}")
         print(f"[KEEP ALIVE] Press Ctrl+C to stop\n")
