@@ -168,20 +168,27 @@ def fmt_session_close(sess: str) -> str:
 
 def fmt_activity_result(sig: dict) -> str:
     result = sig.get("result", "")
-    if "TP HIT" in result:
-        header = "✅✅✅ <b>GAIN</b>"
-    elif "SL HIT" in result:
+    if "WIN" in result:
+        header = "✅✅✅ <b>WIN</b>"
+        bars = "🟩🟩🟩"
+    elif "LOSS" in result:
         header = "❌❌❌ <b>LOSS</b>"
+        bars = "🟥🟥🟥"
+    elif "EXPIRED" in result:
+        header = "⏰⏰⏰ <b>EXPIRED</b>"
+        bars = "🟨🟨🟨"
     else:
         header = "📌 <b>TRADE UPDATE</b>"
+        bars = "⚪⚪⚪"
 
     return (
         f"{LOGO}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{header}\n\n"
+        f"{header}   {bars}\n\n"
         f"{sig['pair']} — {sig['type']}\n"
         f"Entry: <code>{sig['price']}</code>\n"
         f"TP: <code>{sig['tp']}</code>  |  SL: <code>{sig['sl']}</code>\n"
+        f"Duration: {sig.get('duration', 'N/A')}\n"
         f"Result: {result}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"⚠️ <i>Not financial advice.</i>"
@@ -192,8 +199,8 @@ def fmt_session_report(signals: list, date_str: str) -> str:
     if not signals:
         return f"{LOGO}\n📊 <b>SESSION REPORT — {date_str}</b>\n\nNo signals this session."
 
-    tp_hits = sum(1 for s in signals if s.get("result") == "✅ TP HIT")
-    sl_hits = sum(1 for s in signals if s.get("result") == "❌ SL HIT")
+    tp_hits = sum(1 for s in signals if s.get("result") and "WIN" in s.get("result"))
+    sl_hits = sum(1 for s in signals if s.get("result") and "LOSS" in s.get("result"))
     pending = sum(1 for s in signals if not s.get("result"))
     total   = len(signals)
     winrate = round(tp_hits / total * 100) if total else 0

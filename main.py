@@ -380,16 +380,12 @@ def admin_resume():
 def _deliver_signal(sig: dict) -> dict:
     results = {}
     msg = fmt_signal(sig)
-    pair_name = sig["pair"]
-    is_forex = pair_name in FOREX_PAIRS
     tier = sig["tier"]
 
     if tier == "public":
         results["free"] = send_telegram(msg, chat_id=FREE_CHANNEL_ID)
-        if PREMIUM_CHANNEL_ID and not is_forex:
-            results["premium"] = send_telegram(msg, chat_id=PREMIUM_CHANNEL_ID)
-    else:
-        if PREMIUM_CHANNEL_ID and not is_forex:
+    elif tier == "premium":
+        if PREMIUM_CHANNEL_ID:
             results["premium"] = send_telegram(msg, chat_id=PREMIUM_CHANNEL_ID)
 
     return results

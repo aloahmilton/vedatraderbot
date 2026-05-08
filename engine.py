@@ -232,6 +232,7 @@ def analyze_pair(pair: dict, tier: str = "public") -> dict | None:
         "type":      direction,
         "tier":      tier,
         "price":     price,
+        "pip":       pair.get("pip", 0.0001),
         "sl":        sl_price,
         "tp":        tp_price,
         "sl_pips":   sl_pips,
@@ -259,28 +260,44 @@ def evaluate_pending_signals(session_signals: list) -> list:
         if sig.get("result"):  # already closed
             continue
         try:
-            # Check expiry first
             entry_time = sig["timestamp"]
             duration_min = 5 if sig["tier"] == "public" else 120  # 5 min for free, 120 for premium
-            if datetime.now(timezone.utc) > entry_time + timedelta(minutes=duration_min):
-                sig["result"] = "⏰ EXPIRED"
-                closed_signals.append(sig)
-                continue
-            
+
             data = fetch_ohlcv(sig["symbol"], "1m", "1h")
             if not data:
                 continue
             current_price = float(data["close"][-1])
+            entry_price = float(sig.get("price", 0))
+            pip = float(sig.get("pip", 0.0001))
+            expired = datetime.now(timezone.utc) > entry_time + timedelta(minutes=duration_min)
+
             if sig["type"] == "BUY":
                 if current_price >= sig["tp"]:
-                    sig["result"] = "✅ TP HIT"
+                    pips = round((sig["tp"] - entry_price) / pip, 1)
+                    sig["result"] = f"✅ WIN +{pips} pips (TP HIT)"
                 elif current_price <= sig["sl"]:
-                    sig["result"] = "❌ SL HIT"
+                    pips = round((entry_price - sig["sl"]) / pip, 1)
+                    sig["result"] = f"❌ LOSS -{pips} pips (SL HIT)"
+                elif expired:
+                    pips = round((current_price - entry_price) / pip, 1)
+                    if pips >= 0:
+                        sig["result"] = f"✅ WIN +{pips} pips (Expired)"
+                    else:
+                        sig["result"] = f"❌ LOSS {pips} pips (Expired)"
             else:
                 if current_price <= sig["tp"]:
-                    sig["result"] = "✅ TP HIT"
+                    pips = round((entry_price - sig["tp"]) / pip, 1)
+                    sig["result"] = f"✅ WIN +{pips} pips (TP HIT)"
                 elif current_price >= sig["sl"]:
-                    sig["result"] = "❌ SL HIT"
+                    pips = round((sig["sl"] - entry_price) / pip, 1)
+                    sig["result"] = f"❌ LOSS -{pips} pips (SL HIT)"
+                elif expired:
+                    pips = round((entry_price - current_price) / pip, 1)
+                    if pips >= 0:
+                        sig["result"] = f"✅ WIN +{pips} pips (Expired)"
+                    else:
+                        sig["result"] = f"❌ LOSS {pips} pips (Expired)"
+
             if sig.get("result"):
                 closed_signals.append(sig)
             time.sleep(0.3)
