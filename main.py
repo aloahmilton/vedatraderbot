@@ -483,9 +483,9 @@ def scan_markets():
         _handle_session_change(sess)
 
     if weekend and last_session_alerted != "weekend":
-        send_telegram(fmt_weekend_close(), pin=True)
+        send_telegram(fmt_weekend_close())
         if PREMIUM_CHANNEL_ID:
-            send_telegram(fmt_weekend_close(), pin=True, chat_id=PREMIUM_CHANNEL_ID)
+            send_telegram(fmt_weekend_close(), chat_id=PREMIUM_CHANNEL_ID)
         last_session_alerted = "weekend"
 
     if weekend:
@@ -500,7 +500,7 @@ def scan_markets():
         )
 
     if day == 6 and now.hour >= 21 and last_session_alerted == "weekend":
-        send_telegram(fmt_weekend_open(), pin=True)
+        send_telegram(fmt_weekend_open())
 
     if now.hour != last_summary_hour and now.minute < 5:
         last_summary_hour = now.hour
@@ -674,6 +674,10 @@ def robust_main():
     print(f"[WEB] Admin dashboard -> http://0.0.0.0:{port}/admin")
 
     setup_bot_profile()
+
+    # Set initial session state to prevent re-pinning on restart
+    global last_session_alerted
+    last_session_alerted = current_session() if not is_weekend() else "weekend"
 
     # Initial scan - commented out to prevent signals on app restart
     # scan_markets()
