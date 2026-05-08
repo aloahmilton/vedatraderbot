@@ -682,8 +682,8 @@ def robust_main():
     # Initial scan - commented out to prevent signals on app restart
     # scan_markets()
 
-    # Schedule scans every 10 minutes (reduced for efficiency)
-    schedule.every(10).minutes.do(run_scanner_with_guard)
+    # Schedule scans every 5 minutes
+    schedule.every(5).minutes.do(run_scanner_with_guard)
 
     print("[BOT] Running. Ctrl+C to stop.")
     print("[BOT] Production mode: auto-restart enabled")
