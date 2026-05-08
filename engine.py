@@ -8,7 +8,7 @@ Premium channel: swing (M15/H1)
 import time
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── Timeframes ───────────────────────────────────────────────
 SCALP_INTERVAL  = "1m"   # Free forex scalping
@@ -259,6 +259,14 @@ def evaluate_pending_signals(session_signals: list) -> list:
         if sig.get("result"):  # already closed
             continue
         try:
+            # Check expiry first
+            entry_time = sig["timestamp"]
+            duration_min = 5 if sig["tier"] == "public" else 60  # 5 min for free, 60 for premium
+            if datetime.now(timezone.utc) > entry_time + timedelta(minutes=duration_min):
+                sig["result"] = "⏰ EXPIRED"
+                closed_signals.append(sig)
+                continue
+            
             data = fetch_ohlcv(sig["symbol"], "1m", "1h")
             if not data:
                 continue

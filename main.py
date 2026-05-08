@@ -550,6 +550,7 @@ def scan_markets():
             generated += 1
             sig["no"]        = len(session_signals) + 1
             sig["timestamp"] = datetime.now(timezone.utc)
+            sig["session"]   = sess
 
             delivered = _deliver_signal(sig)
             _store_signal(sig, delivered)
@@ -682,8 +683,8 @@ def robust_main():
     # Initial scan - commented out to prevent signals on app restart
     # scan_markets()
 
-    # Schedule scans every 5 minutes
-    schedule.every(5).minutes.do(run_scanner_with_guard)
+    # Schedule scans every 1 minute for timely signals
+    schedule.every(1).minutes.do(run_scanner_with_guard)
 
     print("[BOT] Running. Ctrl+C to stop.")
     print("[BOT] Production mode: auto-restart enabled")

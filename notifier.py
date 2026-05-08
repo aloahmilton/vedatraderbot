@@ -5,7 +5,7 @@ Telegram message formatting and delivery.
 
 import os
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from config import (
     TELEGRAM_TOKEN, FREE_CHANNEL_ID, PREMIUM_CHANNEL_ID,
     ADMIN_CHAT_ID, SESSIONS, session_label
@@ -53,24 +53,65 @@ def send_admin(text: str) -> bool:
 # ── Signal Formatters ────────────────────────────────────────
 
 def fmt_signal(sig: dict) -> str:
-    arrow   = "🟢" if sig["type"] == "BUY" else "🔴"
-    tier_lbl = "🔓 FREE SIGNAL" if sig["tier"] == "public" else "💎 PREMIUM SIGNAL"
-    now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    if sig["tier"] == "public":
+        # New format for free channel
+        direction_icon = "▲" if sig["type"] == "BUY" else "▼"
+        bar_color = "🟩" if sig["type"] == "BUY" else "🟥"
+        call_put = "CALL" if sig["type"] == "BUY" else "PUT"
+        now = datetime.now(timezone.utc)
+        expiry = now.replace(second=0, microsecond=0) + timedelta(minutes=5)
+        gale1 = expiry + timedelta(minutes=5)
+        gale2 = gale1 + timedelta(minutes=5)
+        
+        # Strength stars
+        score = sig.get("score", 0)
+        if score >= 85:
+            stars = "★★★★★"
+        elif score >= 75:
+            stars = "★★★★☆"
+        elif score >= 65:
+            stars = "★★★☆☆"
+        elif score >= 55:
+            stars = "★★☆☆☆"
+        else:
+            stars = "★☆☆☆☆"
+        
+        session_name = session_label(sig.get("session", "unknown")).title()
+        
+        return (
+            f"📡  VEDA SIGNAL  #{sig.get('no', '?')}   ·   {session_name} Session\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"{direction_icon}  {sig['pair']}   ·   {bar_color}{sig['type']}  /  {call_put}\n\n"
+            f"💵  Entry price   {sig['price']}\n"
+            f"⏱️  Entry time    {now.strftime('%H:%M')} UTC\n"
+            f"⏳  Expiry         5 min  →  {expiry.strftime('%H:%M')}\n\n"
+            f"🛡  Gale Recovery\n"
+            f"   ┣ 1st gale  →  {gale1.strftime('%H:%M')}\n"
+            f"   ┗ 2nd gale  →  {gale2.strftime('%H:%M')}\n\n"
+            f"📊  Strength   {stars}\n"
+            f"🎯  RSI {sig['rsi']}   ·   Trigger PRE\n"
+            f"━━━━━━━━━━━━━━━━━━━"
+        )
+    else:
+        # Keep current format for premium
+        arrow   = "🟢" if sig["type"] == "BUY" else "🔴"
+        tier_lbl = "💎 PREMIUM SIGNAL"
+        now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
-    return (
-        f"{LOGO}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{tier_lbl}  |  {sig.get('quality','')}\n\n"
-        f"{arrow}  <b>{sig['pair']}</b>  —  <b>{sig['type']}</b>\n\n"
-        f"🕐 Time: <code>{now_str}</code>\n"
-        f"💰 Entry: <code>{sig['price']}</code>\n"
-        f"🎯 Take Profit: <code>{sig['tp']}</code>  (+{sig['tp_pips']} pips)\n"
-        f"🛑 Stop Loss: <code>{sig['sl']}</code>  (-{sig['sl_pips']} pips)\n"
-        f"⏱ Duration: {sig['duration']}\n\n"
-        f"📊 RSI: {sig['rsi']}  |  EMA: {sig['ema_cross'].title()}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚠️ <i>Trade at your own risk. Not financial advice.</i>"
-    )
+        return (
+            f"{LOGO}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{tier_lbl}  |  {sig.get('quality','')}\n\n"
+            f"{arrow}  <b>{sig['pair']}</b>  —  <b>{sig['type']}</b>\n\n"
+            f"🕐 Time: <code>{now_str}</code>\n"
+            f"💰 Entry: <code>{sig['price']}</code>\n"
+            f"🎯 Take Profit: <code>{sig['tp']}</code>  (+{sig['tp_pips']} pips)\n"
+            f"🛑 Stop Loss: <code>{sig['sl']}</code>  (-{sig['sl_pips']} pips)\n"
+            f"⏱ Duration: {sig['duration']}\n\n"
+            f"📊 RSI: {sig['rsi']}  |  EMA: {sig['ema_cross'].title()}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ <i>Trade at your own risk. Not financial advice.</i>"
+        )
 
 def fmt_gold_signal(sig: dict) -> str:
     arrow = "🟢" if sig["type"] == "BUY" else "🔴"
