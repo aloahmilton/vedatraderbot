@@ -706,11 +706,7 @@ def robust_main():
         except Exception as e:
             print(f"[BOT ERROR] {e}")
             restart_count += 1
-            if restart_count > MAX_RESTARTS:
-                print("[BOT] Max restarts reached, exiting...")
-                send_admin("⚠️ BOT CRASHED - Max restarts reached. Manual restart required!")
-                break
-            print(f"[BOT] Restarting... ({restart_count}/{MAX_RESTARTS})")
+            print(f"[BOT] Restarting... ({restart_count})")
             time.sleep(5)
 
 # Health check endpoint for production monitoring
