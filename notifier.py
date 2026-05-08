@@ -93,24 +93,26 @@ def fmt_signal(sig: dict) -> str:
             f"━━━━━━━━━━━━━━━━━━━"
         )
     else:
-        # Keep current format for premium
         arrow   = "🟢" if sig["type"] == "BUY" else "🔴"
         tier_lbl = "💎 PREMIUM SIGNAL"
         now_str = datetime.now(timezone.utc).strftime("%H:%M UTC")
+        session_name = session_label(sig.get("session", "unknown")).title()
+        asset_type = "FOREX" if sig["pair"] in FOREX_PAIRS else "OTHER"
 
         return (
             f"{LOGO}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{tier_lbl}  |  {sig.get('quality','')}\n\n"
+            f"{tier_lbl}  |  {sig.get('quality','')}\n"
+            f"{session_name} Session\n\n"
             f"{arrow}  <b>{sig['pair']}</b>  —  <b>{sig['type']}</b>\n\n"
-            f"🕐 Time: <code>{now_str}</code>\n"
             f"💰 Entry: <code>{sig['price']}</code>\n"
-            f"🎯 Take Profit: <code>{sig['tp']}</code>  (+{sig['tp_pips']} pips)\n"
-            f"🛑 Stop Loss: <code>{sig['sl']}</code>  (-{sig['sl_pips']} pips)\n"
+            f"🧾 Asset: {asset_type}\n"
+            f"🎯 TP: <code>{sig['tp']}</code>  (+{sig['tp_pips']} pips)\n"
+            f"🛑 SL: <code>{sig['sl']}</code>  (-{sig['sl_pips']} pips)\n"
             f"⏱ Duration: {sig['duration']}\n\n"
             f"📊 RSI: {sig['rsi']}  |  EMA: {sig['ema_cross'].title()}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ <i>Trade at your own risk. Not financial advice.</i>"
+            f"⚠️ <i>Not financial advice.</i>"
         )
 
 def fmt_gold_signal(sig: dict) -> str:
@@ -181,10 +183,14 @@ def fmt_activity_result(sig: dict) -> str:
         header = "📌 <b>TRADE UPDATE</b>"
         bars = "⚪⚪⚪"
 
+    tier_label = "💎 PREMIUM" if sig.get("tier") == "premium" else "🔓 FREE"
+    session_name = session_label(sig.get("session", "unknown")).title()
+
     return (
         f"{LOGO}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{header}   {bars}\n\n"
+        f"{tier_label} | {header}   {bars}\n"
+        f"{session_name} Session\n\n"
         f"{sig['pair']} — {sig['type']}\n"
         f"Entry: <code>{sig['price']}</code>\n"
         f"TP: <code>{sig['tp']}</code>  |  SL: <code>{sig['sl']}</code>\n"
