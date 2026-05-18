@@ -22,7 +22,8 @@ from config import (
     pairs_for_session, current_session, session_label,
     SESSION_REPORT_TIMES_UTC, SESSION_OPEN_TIMES_UTC,
     is_weekend, validate_runtime_config, SESSIONS,
-    TELEGRAM_TOKEN
+    TELEGRAM_TOKEN,
+    WEEKEND_TRADING_ENABLED, is_trading_blocked, is_weekend_forced
 )
 from engine import analyze_pair, evaluate_pending_signals
 from notifier import (
@@ -464,7 +465,8 @@ def scan_markets():
     sess = current_session()
     day  = now.weekday()
 
-    weekend = is_weekend()
+    blocked   = is_trading_blocked()
+    is_week   = is_weekend_forced()
 
     try:
         closed_signals = evaluate_pending_signals(session_signals)
@@ -475,16 +477,16 @@ def scan_markets():
     except Exception as e:
         log_scan_error("evaluate_pending_signals", str(e))
 
-    if not weekend and sess != last_session_alerted:
+    if is_week and not WEEKEND_TRADING_ENABLED and sess != last_session_alerted:
         _handle_session_change(sess)
 
-    if weekend and last_session_alerted != "weekend":
+    if is_week and not WEEKEND_TRADING_ENABLED and last_session_alerted != "weekend":
         send_telegram(fmt_weekend_close())
         if PREMIUM_CHANNEL_ID:
             send_telegram(fmt_weekend_close(), chat_id=PREMIUM_CHANNEL_ID)
         last_session_alerted = "weekend"
 
-    if weekend:
+    if blocked:
         if not PREMIUM_CHANNEL_ID:
             return
         from config import PREMIUM_CRYPTO
@@ -495,8 +497,12 @@ def scan_markets():
             (pairs_for_session(sess, "premium") if PREMIUM_CHANNEL_ID else [])
         )
 
-    if day == 6 and now.hour >= 21 and last_session_alerted == "weekend":
-        send_telegram(fmt_weekend_open())
+    if is_week and not WEEKEND_TRADING_ENABLED:
+        if day == 6 and now.hour >= 21 and last_session_alerted == "weekend":
+            send_telegram(fmt_weekend_open())
+    elif is_week and WEEKEND_TRADING_ENABLED:
+        if last_session_alerted == "weekend":
+            last_session_alerted = ""
 
     if now.hour != last_summary_hour and now.minute < 5:
         last_summary_hour = now.hour
@@ -621,12 +627,22 @@ def poll_commands():
                                 send_telegram,
                                 bool(PREMIUM_CHANNEL_ID),
                                 pause_callback=set_signals_paused,
-                                resume_callback=set_signals_paused
+                                resume_callback=set_signals_paused,
+                                weekend_toggle_callback=lambda en: _on_weekend_toggle(en)
                             )
                     except Exception as e:
                         log_scan_error("telegram_command", str(e))
     except Exception as e:
         print(f"[POLL ERROR] {e}")
+
+
+def _on_weekend_toggle(enabled: bool):
+    """Reset last_session_alerted so session announcement fires after toggle."""
+    global last_session_alerted
+    if enabled and last_session_alerted == "weekend":
+        last_session_alerted = ""
+    elif not enabled and last_session_alerted != "weekend":
+        last_session_alerted = "weekend"
 
 
 # -- Robust Scanner with Auto-Restart ---------------------
@@ -674,7 +690,7 @@ def robust_main():
 
     # Set initial session state to prevent re-pinning on restart
     global last_session_alerted
-    last_session_alerted = current_session() if not is_weekend() else "weekend"
+    last_session_alerted = current_session() if not is_trading_blocked() else "weekend"
 
     # Initial scan - commented out to prevent signals on app restart
     # scan_markets()

@@ -156,6 +156,17 @@ def is_weekend() -> bool:
     if day == 6 and now.hour < 21: return True
     return False
 
+# ── Weekend Trading ───────────────────────────────────────────
+WEEKEND_TRADING_ENABLED: bool = os.getenv("WEEKEND_TRADING_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+def is_weekend_forced() -> bool:
+    """Return the actual weekend state regardless of override."""
+    return is_weekend()
+
+def is_trading_blocked() -> bool:
+    """True when normal (non-overridden) weekend blocks trading."""
+    return is_weekend() and not WEEKEND_TRADING_ENABLED
+
 def validate_runtime_config() -> list:
     issues = []
     if not TELEGRAM_TOKEN:    issues.append("⚠ TELEGRAM_BOT_TOKEN not set")

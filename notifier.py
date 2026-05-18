@@ -298,6 +298,38 @@ def fmt_broker_reminder() -> str:
     )
 
 
+def fmt_channel_stats(free_subs: int, premium_subs: int, signals_sent: int) -> str:
+    return (
+        f"📊 <b>CHANNEL STATS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔓 Free channel subs:    {free_subs}\n"
+        f"💎 Premium channel subs: {premium_subs}\n"
+        f"📤 Signals sent today:   {signals_sent}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+def fmt_channel_announce(channel_name: str, message: str) -> str:
+    return (
+        f"{LOGO}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📢 <b>ANNOUNCEMENT — {channel_name}</b>\n\n"
+        f"{message}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+def fmt_weekend_toggle(enabled: bool) -> str:
+    status = "🟢 <b>ENABLED</b>" if enabled else "🔴 <b>DISABLED</b>"
+    return (
+        f"{LOGO}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏁 <b>Weekend Trading {status}</b>\n\n"
+        f"{'Trading continues on weekends — scanning all pairs.' if enabled else 'Weekend markets are now closed — crypto signals only.'}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
 # ── Admin Summary Formatter ──────────────────────────────────
 
 def fmt_admin_summary(stats: dict, ai_note: str = "") -> str:
@@ -320,7 +352,8 @@ def fmt_admin_summary(stats: dict, ai_note: str = "") -> str:
 # ── Bot Commands Handler ─────────────────────────────────────
 
 def handle_telegram_command(update: dict, send_fn, premium_enabled: bool,
-                            pause_callback=None, resume_callback=None):
+                            pause_callback=None, resume_callback=None,
+                            weekend_toggle_callback=None):
     from database import (
         add_subscriber, upgrade_subscriber, downgrade_subscriber,
         remove_subscriber, get_all_subscribers, get_subscriber, get_daily_stats,
@@ -382,7 +415,12 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool,
                 f"/kick @user — Remove subscriber\n"
                 f"/subscribers — List all subscribers\n"
                 f"/summary — Daily admin summary\n"
-                f"/broadcast — Broadcast a message\n"
+                f"/broadcast <msg> — Broadcast to both channels\n"
+                f"/sendfree <msg> — Send to free channel only\n"
+                f"/sendpremium <msg> — Send to premium channel only\n"
+                f"/channelstats — Channel sub & signal stats\n"
+                f"/targeton — Enable weekend trading\n"
+                f"/targetoff — Disable weekend trading\n"
                 f"/pause — Pause all signals\n"
                 f"/resume — Resume signals"
             )
@@ -562,6 +600,50 @@ def handle_telegram_command(update: dict, send_fn, premium_enabled: bool,
         send_fn("▶️ Signaling resumed.", chat_id=chat_id)
         return
 
+    # ── Admin Channel Control commands ──
+    if not is_admin:
+        if cmd in ["/sendfree", "/sendpremium", "/channelstats", "/targeton", "/targetoff"]:
+            send_fn("⛔ Admin only.", chat_id=chat_id)
+        return
+
+    if cmd == "/sendfree" and args:
+        message = " ".join(args)
+        ok = send_fn(fmt_channel_announce("FREE CHANNEL", message), chat_id=FREE_CHANNEL_ID)
+        send_fn(f"✅ {'Sent' if ok else 'Failed'} to free channel.", chat_id=chat_id)
+        return
+
+    if cmd == "/sendpremium" and args and PREMIUM_CHANNEL_ID:
+        message = " ".join(args)
+        ok = send_fn(fmt_channel_announce("PREMIUM CHANNEL", message), chat_id=PREMIUM_CHANNEL_ID)
+        send_fn(f"✅ {'Sent' if ok else 'Failed'} to premium channel.", chat_id=chat_id)
+        return
+
+    if cmd == "/channelstats":
+        from database import get_all_subscribers, get_daily_stats, get_db
+        db            = get_db()
+        free_subs     = len(get_all_subscribers("free"))
+        premium_subs  = len(get_all_subscribers("premium"))
+        signals_sent  = db["signals"].count_documents({}) if db else 0
+        send_fn(fmt_channel_stats(free_subs, premium_subs, signals_sent), chat_id=chat_id)
+        return
+
+    if cmd == "/targeton":
+        from config import WEEKEND_TRADING_ENABLED
+        import config as _cfg
+        _cfg.WEEKEND_TRADING_ENABLED = True
+        if weekend_toggle_callback:
+            weekend_toggle_callback(True)
+        send_fn(fmt_weekend_toggle(True), chat_id=chat_id)
+        return
+
+    if cmd == "/targetoff":
+        import config as _cfg
+        _cfg.WEEKEND_TRADING_ENABLED = False
+        if weekend_toggle_callback:
+            weekend_toggle_callback(False)
+        send_fn(fmt_weekend_toggle(False), chat_id=chat_id)
+        return
+
 
 # ── Bot Profile Setup ────────────────────────────────────────
 
@@ -612,7 +694,7 @@ def setup_bot_profile():
                 {"command": "start",      "description": "Register & get started"},
                 {"command": "signals",    "description": "View recent signals"},
                 {"command": "status",     "description": "Bot status & stats"},
-                {"command": "daily",      "description": "Show today\'s performance"},
+                {"command": "daily",      "description": "Show today's performance"},
                 {"command": "results",    "description": "Show recent signal results"},
                 {"command": "lastsignal", "description": "Show the latest signal"},
                 {"command": "session",    "description": "Session summary"},
@@ -635,7 +717,7 @@ def setup_bot_profile():
                     {"command": "status",       "description": "Bot status & stats"},
                     {"command": "premium",      "description": "Learn about premium"},
                     {"command": "help",         "description": "Show help & commands"},
-                    {"command": "daily",        "description": "Show today\'s performance"},
+                    {"command": "daily",        "description": "Show today's performance"},
                     {"command": "results",      "description": "Show recent signal results"},
                     {"command": "lastsignal",   "description": "Show the latest signal"},
                     {"command": "session",      "description": "Session summary"},
@@ -645,7 +727,12 @@ def setup_bot_profile():
                     {"command": "kick",         "description": "Remove subscriber (admin)"},
                     {"command": "subscribers",  "description": "List all subscribers (admin)"},
                     {"command": "summary",      "description": "Daily performance summary (admin)"},
-                    {"command": "broadcast",    "description": "Broadcast message (admin)"},
+                    {"command": "broadcast",    "description": "Broadcast to both channels (admin)"},
+                    {"command": "sendfree",     "description": "Send to free channel (admin)"},
+                    {"command": "sendpremium",  "description": "Send to premium channel (admin)"},
+                    {"command": "channelstats",  "description": "Channel subscriber stats (admin)"},
+                    {"command": "targeton",     "description": "Enable weekend trading (admin)"},
+                    {"command": "targetoff",    "description": "Disable weekend trading (admin)"},
                     {"command": "pause",        "description": "Pause all signals (admin)"},
                     {"command": "resume",       "description": "Resume signals (admin)"},
                 ],
